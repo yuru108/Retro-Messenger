@@ -1,16 +1,37 @@
-import socket
-import threading
+import asyncio
+import websockets
+import sqlite3
 from datetime import datetime
 
-HOST = '0.0.0.0'
-PORT = 12345
+conn = sqlite3.connect('chat.db', check_same_thread=False)
+cursor = conn.cursor()
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS Users (
+    uid INTEGER PRIMARY KEY,
+    username TEXT NOT NULL
+)
+""")
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS Messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    from_uid INTEGER,
+    to_uid INTEGER,
+    message TEXT,
+    date TEXT,
+    read BOOLEAN DEFAULT 0,
+    FOREIGN KEY (from_uid) REFERENCES Users(uid),
+    FOREIGN KEY (to_uid) REFERENCES Users(uid)
+)
+""")
+conn.commit()
 
 class User:
-    def __init__(self, uid, addr, username, conn):
+    def __init__(self, uid, username, websocket):
         self.uid = uid
-        self.addr = addr
         self.username = username
-        self.conn = conn
+        self.websocket = websocket
 
 class Message:
     def __init__(self, from_uid, to_uid, message):
@@ -18,74 +39,143 @@ class Message:
         self.to_uid = to_uid
         self.message = message
         self.date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        self.read = False
 
     def format_message(self):
-        return f"[{self.date}] User {self.from_uid} -> User {self.to_uid}: {self.message}"
+        return f"[{self.date}] User {self.from_uid} -> User {self.to_uid}: {self.message} ({'已讀' if self.read else '未讀'})"
 
-users = []
-uid_counter = 1
+    def save_to_db(self):
+        cursor.execute(
+            "INSERT INTO Messages (from_uid, to_uid, message, date) VALUES (?, ?, ?, ?)",
+            (self.from_uid, self.to_uid, self.message, self.date)
+        )
+        conn.commit()
 
-def find_user_by_uid(uid):
-    """根據 UID 查找使用者"""
-    for user in users:
-        if user.uid == int(uid):
-            return user
+connected_users = {}
+
+async def get_unread_messages(uid):
+    cursor.execute(
+        "SELECT from_uid, message, date FROM Messages WHERE to_uid = ? AND read = 0",
+        (uid,)
+    )
+    return cursor.fetchall()
+
+async def mark_messages_as_read(uid):
+    cursor.execute(
+        "UPDATE Messages SET read = 1 WHERE to_uid = ? AND read = 0",
+        (uid,)
+    )
+    conn.commit()
+
+async def find_user_by_uid(uid):
+    cursor.execute("SELECT * FROM Users WHERE uid = ?", (uid,))
+    user = cursor.fetchone()
+    if user:
+        if connected_users.get(str(user[0])):
+            return connected_users[str(user[0])]
+        return User(user[0], user[1], None)
     return None
 
-def handle_user(user):
-    """處理每個使用者的訊息"""
-    while True:
-        try:
-            # 接收來自 client 的資料 (格式: 目標 UID|訊息內容)
-            data = user.conn.recv(1024).decode('utf-8')
-            if data:
-                target_uid, msg_content = data.split('|', 1)
-                target_user = find_user_by_uid(target_uid)
+async def register_user(websocket):
+    await websocket.send("請輸入uid:")
+    uid = await websocket.recv()
 
-                if target_user:
-                    message = Message(user.uid, target_user.uid, msg_content)
-                    print(message.format_message())
-                    target_user.conn.send(message.format_message().encode('utf-8'))
+    cursor.execute("SELECT username FROM Users WHERE uid = ?", (uid,))
+    username = cursor.fetchone()
+
+    if username:
+        username = username[0]
+        print(f"{username} ({uid}) logged in")
+        await websocket.send(username)
+    else:
+        await websocket.send("user_not_found")
+        username = await websocket.recv()
+        cursor.execute("INSERT INTO Users (uid, username) VALUES (?, ?)", (uid, username))
+        print(f"{username} ({uid}) registered")
+        conn.commit()
+
+    user = User(uid, username, websocket)
+    connected_users[str(uid)] = user
+
+    unread_messages = await get_unread_messages(uid)
+    if unread_messages:
+        await websocket.send("您的未讀訊息：")
+        for from_uid, message, date in unread_messages:
+            await websocket.send(f"[{date}] User {from_uid}: {message}")
+    else:
+        await websocket.send("目前沒有未讀訊息。")
+
+    return user
+
+async def send_history(user):
+    cursor.execute(
+        "SELECT from_uid, to_uid, message, date, read FROM Messages WHERE from_uid = ? OR to_uid = ?",
+        (user.uid, user.uid)
+    )
+    history = cursor.fetchall()
+
+    if history:
+        await user.websocket.send("歷史訊息紀錄：")
+        for from_uid, to_uid, msg, date, read in history:
+            await user.websocket.send(f"[{date}] User {from_uid} -> User {to_uid}: {msg} ({'已讀' if read else '未讀'})")
+        
+        await mark_messages_as_read(user.uid)
+    else:
+        await user.websocket.send("沒有歷史訊息。")
+
+
+async def handle_message(user):
+    try:
+        async for message in user.websocket:
+            print(f"Received message from {user.username}: {message}")
+            if message == "history":
+                print(f"{user.username} requested message history")
+                await send_history(user)
+            elif '|' in message:
+                print(f"{user.username} sent a message")
+                target_uid, msg_content = message.split('|', 1)
+                target_user = await find_user_by_uid(target_uid)
+
+                if target_user is not None:
+                    formatted_message = Message(user.uid, target_user.uid, msg_content)
+                    print(formatted_message.format_message())
+
+                    if target_user.websocket:
+                        await target_user.websocket.send(formatted_message.format_message())
+                    else:
+                        print(f"Cannot send message to {target_user.username} ({target_user.uid})")
+
+                    formatted_message.save_to_db()
+                    print("message send success")
                 else:
-                    user.conn.send(f"使用者 UID {target_uid} 不存在".encode('utf-8'))
+                    print("target user not found")
+                    await user.websocket.send(f"使用者 UID {target_uid} 不存在")
+            elif message == "find":
+                print(f"{user.username} requested user list")
+                cursor.execute("SELECT * FROM Users")
+                users = cursor.fetchall()
+
+                await user.websocket.send("使用者列表：")
+                for uid, username in users:
+                    await user.websocket.send(f"UID: {uid}, 使用者名稱: {username} {'(上線中)' if connected_users.get(str(uid)) else ''}")
+            elif message == "quit":
+                break
             else:
-                raise Exception("連線中斷")
-        except:
-            print(f"{user.username} 離線")
-            users.remove(user)
-            user.conn.close()
-            broadcast(f"{user.username} 已離開聊天室".encode('utf-8'))
-            break
+                await user.websocket.send("無效指令。")
+    except websockets.ConnectionClosed:
+        print(f"{user.username} 離線")
+        connected_users.pop(user.uid)
 
-def broadcast(message):
-    """廣播訊息給所有使用者"""
-    for user in users:
-        try:
-            user.conn.send(message)
-        except:
-            users.remove(user)
+async def main():
+    async with websockets.serve(main_handler, "0.0.0.0", 12345):
+        print("WebSocket 伺服器已啟動，等待連線...")
+        await asyncio.Future()  # 保持伺服器運行
 
-def main():
-    global uid_counter
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.bind((HOST, PORT))
-    server.listen()
+async def main_handler(websocket, path):
+    user = await register_user(websocket)
+    await handle_message(user)
 
-    print(f"伺服器啟動，等待連線中... ({HOST}:{PORT})")
-
-    while True:
-        conn, addr = server.accept()
-        conn.send("請輸入使用者名稱: ".encode('utf-8'))
-        username = conn.recv(1024).decode('utf-8')
-
-        user = User(uid_counter, addr, username, conn)
-        uid_counter += 1
-
-        users.append(user)
-        print(f"{username} (UID: {user.uid}) 來自 {addr} 已加入聊天室")
-        broadcast(f"{username} 已加入聊天室 (UID: {user.uid})".encode('utf-8'))
-
-        threading.Thread(target=handle_user, args=(user,)).start()
+users = []
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
