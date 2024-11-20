@@ -41,8 +41,10 @@ class Message:
         self.date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         self.read = False
 
-    def format_message(self):
-        return f"[{self.date}] User {self.from_uid} -> User {self.to_uid}: {self.message} ({'已讀' if self.read else '未讀'})"
+    async def format_message(self):
+        from_user = await find_user_by_uid(self.from_uid)
+        to_user = await find_user_by_uid(self.to_uid)
+        return f"[{self.date}] {from_user.username} -> {to_user.username}: {self.message} ({'已讀' if self.read else '未讀'})"
 
     def save_to_db(self):
         cursor.execute(
@@ -101,7 +103,8 @@ async def register_user(websocket):
     if unread_messages:
         await websocket.send("您的未讀訊息：")
         for from_uid, message, date in unread_messages:
-            await websocket.send(f"[{date}] User {from_uid}: {message}")
+            from_user = await find_user_by_uid(from_uid)
+            await websocket.send(f"[{date}] {from_user.username}: {message}")
     else:
         await websocket.send("目前沒有未讀訊息。")
 
@@ -117,7 +120,9 @@ async def send_history(user):
     if history:
         await user.websocket.send("歷史訊息紀錄：")
         for from_uid, to_uid, msg, date, read in history:
-            await user.websocket.send(f"[{date}] User {from_uid} -> User {to_uid}: {msg} ({'已讀' if read else '未讀'})")
+            from_user = await find_user_by_uid(from_uid)
+            to_user = await find_user_by_uid(to_uid)
+            await user.websocket.send(f"[{date}] {from_user.username} -> {to_user.username}: {msg} ({'已讀' if read else '未讀'})")
         
         await mark_messages_as_read(user.uid)
     else:
