@@ -24,20 +24,20 @@ const Register = () => {
                 console.log('Registration successful:', response.data);
 
                 // 顯示成功訊息
-                setSuccessMessage('註冊成功，請登入！');
+                setSuccessMessage('Register success, please login!');
                 setError(null); // 清空錯誤訊息
 
                 // 2 秒後自動導航到登入頁面
                 setTimeout(() => {
                     navigate('/'); // 導航到根路徑（登入頁面）
-                }, 2000);
+                }, 1000);
             } else {
                 // 如果不是 201 狀態碼，顯示後端返回的錯誤訊息
-                setError(response.data.message || '註冊失敗，請再試一次。');
+                setError(response.data.message || 'Register failed. Please try again.');
             }
         } catch (error: any) {
             // 處理 HTTP 請求錯誤，顯示後端返回的錯誤訊息或預設訊息
-            setError(error.response?.data?.message || '註冊失敗，請再試一次。');
+            setError(error.response?.data?.message || 'Register failed. Please try again.');
         }
     };
 

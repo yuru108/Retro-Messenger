@@ -4,6 +4,7 @@ import Login from "./Component/Auth/Login";
 import Register from './Component/Auth/Register';
 import ChatRoom from './Component/Chat/ChatRoom';
 import Settings from './Component/Chat/Settings';
+import GroupCreation from './Component/Chat/GroupCreationModal'; // 匯入群組功能元件
 
 // 創建 UserContext，並設定初始的 uid 為 null
 export const UserContext = createContext<{ uid: string | null }>({ uid: null });
@@ -28,6 +29,9 @@ const App = () => {
                     
                     {/* 只有當 uid 存在時，才會顯示設定頁面 */}
                     {uid && <Route path="/settings" element={<Settings />} />}
+                    
+                    {/* 群組創建頁面 */}
+                    {uid && <Route path="/group" element={<GroupCreation onClose={() => {}} onCreate={() => {}} users={[]} />} />}
                 </Routes>
             </Router>
         </UserContext.Provider>

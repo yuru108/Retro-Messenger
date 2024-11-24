@@ -117,6 +117,7 @@ const ChatRoom: React.FC = () => {
                     <UserProfile 
                         uid={uid} // 傳入當前用戶的 UID
                         onLogout={handleLogout} // 傳入登出處理函數
+                        users={users} // 傳遞 users 資料給 UserProfile
                     />
                 </div>
             </div>
