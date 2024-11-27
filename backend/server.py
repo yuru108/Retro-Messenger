@@ -2,34 +2,48 @@ import asyncio
 import websockets
 import sqlite3
 from datetime import datetime
-import os
+import bcrypt
 
 
 conn = sqlite3.connect('chat.db', check_same_thread=False)
 cursor = conn.cursor()
 
-# 顯示資料庫的絕對路徑
-print(f"Database path: {os.path.abspath('chat.db')}")
-
-
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS Users (
     uid INTEGER PRIMARY KEY,
-    username TEXT NOT NULL
+    username TEXT NOT NULL,
+    password TEXT NOT NULL
 )
 """)
 
 cursor.execute("""
-CREATE TABLE IF NOT EXISTS Messages (
+CREATE TABLE IF NOT EXISTS Rooms (
+    room_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    room_name TEXT
+);
+""")
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS RoomMembers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    room_id INTEGER NOT NULL,
+    uid INTEGER NOT NULL,
+    FOREIGN KEY (room_id) REFERENCES Rooms(room_id),
+    FOREIGN KEY (uid) REFERENCES Users(uid)
+);
+""")
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS Messages (
+    id INTEGER PRIMARY KEY,
     from_uid INTEGER,
-    to_uid INTEGER,
+  	to_room_id INTEGER,
     message TEXT,
     date TEXT,
-    read BOOLEAN DEFAULT 0,
+  	"read" BOOLEAN DEFAULT 0,
     FOREIGN KEY (from_uid) REFERENCES Users(uid),
-    FOREIGN KEY (to_uid) REFERENCES Users(uid)
-)
+  	FOREIGN KEY (to_room_id) REFERENCES Rooms(room_id)
+);
 """)
 conn.commit()
 
@@ -39,37 +53,54 @@ class User:
         self.username = username
         self.websocket = websocket
 
+class Room:
+    def __init__(self, room_id, room_name):
+        self.room_id = room_id
+        self.room_name = room_name
+
 class Message:
-    def __init__(self, from_uid, to_uid, message):
+    def __init__(self, from_uid, to_room_id, message):
         self.from_uid = from_uid
-        self.to_uid = to_uid
+        self.to_room_id = to_room_id
         self.message = message
         self.date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         self.read = False
 
-    def format_message(self):
-        return f"[{self.date}] User {self.from_uid} -> User {self.to_uid}: {self.message} ({'已讀' if self.read else '未讀'})"
+    async def format_message(self):
+        from_user = await find_user_by_uid(self.from_uid)
+        to_room = await find_room_by_roomid(self.to_room_id)
+        return f"[{to_room.room_name}] {from_user.username}: {self.message} {self.date}({'已讀' if self.read else '未讀'})"
 
     def save_to_db(self):
         cursor.execute(
-            "INSERT INTO Messages (from_uid, to_uid, message, date) VALUES (?, ?, ?, ?)",
-            (self.from_uid, self.to_uid, self.message, self.date)
+            "INSERT INTO Messages (from_uid, to_room_id, message, date) VALUES (?, ?, ?, ?)",
+            (self.from_uid, self.to_room_id, self.message, self.date)
         )
         conn.commit()
 
 connected_users = {}
 
-async def get_unread_messages(uid):
+async def get_unread_messages(user, room_id):
     cursor.execute(
-        "SELECT from_uid, message, date FROM Messages WHERE to_uid = ? AND read = 0",
-        (uid,)
+        "SELECT from_uid, message, date FROM Messages WHERE to_room_id = ? AND from_id != ? AND read = 0",
+        (room_id, user.uid)
     )
-    return cursor.fetchall()
+    message = cursor.fetchall()
 
-async def mark_messages_as_read(uid):
+    if message:
+        for from_uid, to_room_id, msg, date, read in message:
+            from_user = await find_user_by_uid(from_uid)
+            to_room = await find_room_by_roomid(to_room_id)
+            response += f"{to_room.room_name} {from_user.username} {msg} {date} {'已讀' if read else '未讀'}\n"
+    else:
+        response = None
+
+    await user.websocket.send(response)
+
+async def mark_messages_as_read(room_id):
     cursor.execute(
-        "UPDATE Messages SET read = 1 WHERE to_uid = ? AND read = 0",
-        (uid,)
+        "UPDATE Messages SET read = 1 WHERE to_room_id = ? AND read = 0",
+        (room_id,)
     )
     conn.commit()
 
@@ -82,106 +113,180 @@ async def find_user_by_uid(uid):
         return User(user[0], user[1], None)
     return None
 
+async def find_room_by_roomid(room_id):
+    cursor.execute("SELECT * FROM Rooms WHERE room_id = ?", (room_id,))
+    room = cursor.fetchone()
+    if room:
+        return Room(room[0], room[1])
+    return None
+
 async def register_user(websocket):
-    await websocket.send("請輸入uid:")
-    uid = await websocket.recv()
+    """註冊新使用者並建立個人聊天室"""
+    # 獲取新的 UID：從資料庫中獲取當前最大 UID 並加 1
+    cursor.execute("SELECT COALESCE(MAX(uid), 0) + 1 FROM Users")
+    uid = cursor.fetchone()[0]  # 自增 UID
 
-    cursor.execute("SELECT username FROM Users WHERE uid = ?", (uid,))
-    username = cursor.fetchone()
+    # 請求使用者名稱和密碼
+    await websocket.send("請輸入使用者名稱:")
+    username = await websocket.recv()
+    raw_password = await websocket.recv()
+    hashed_password = bcrypt.hashpw(raw_password.encode('utf-8'), bcrypt.gensalt())
 
-    if username:
-        username = username[0]
-        print(f"{username} ({uid}) logged in")
-        await websocket.send(username)
-    else:
-        await websocket.send("user_not_found")
-        username = await websocket.recv()
-        cursor.execute("INSERT INTO Users (uid, username) VALUES (?, ?)", (uid, username))
-        print(f"{username} ({uid}) registered")
+    # 檢查使用者是否已存在
+    cursor.execute("SELECT username FROM Users WHERE username = ?", (username,))
+    if cursor.fetchone():
+        await websocket.send("user_already_exists")
+        print(f"使用者名稱 {username} 已存在")
+        return None
+
+    # 新增使用者至資料庫
+    cursor.execute("INSERT INTO Users (uid, username) VALUES (?, ?, ?)", (uid, username, hashed_password))
+    conn.commit()
+    await websocket.send(f"註冊成功：{username}")
+    print(f"註冊成功：{username} (UID: {uid})")
+
+    # 為新使用者與所有現有使用者建立個人聊天室
+    cursor.execute("SELECT uid, username FROM Users WHERE uid != ?", (uid,))
+    existing_users = cursor.fetchall()
+
+    for existing_uid, existing_username in existing_users:
+        room_name = f"{username} & {existing_username}"
+        cursor.execute("INSERT INTO Rooms (room_name) VALUES (?)", (room_name,))
+        room_id = cursor.lastrowid
         conn.commit()
 
-    user = User(uid, username, websocket)
-    connected_users[str(uid)] = user
+        # 將新使用者與現有使用者加入房間
+        cursor.execute("INSERT INTO RoomMembers (room_id, uid) VALUES (?, ?)", (room_id, uid))
+        cursor.execute("INSERT INTO RoomMembers (room_id, uid) VALUES (?, ?)", (room_id, existing_uid))
+        conn.commit()
+        print(f"建立個人聊天室：{room_name} (房間 ID: {room_id})")
 
-    unread_messages = await get_unread_messages(uid)
-    if unread_messages:
-        await websocket.send("您的未讀訊息：")
-        for from_uid, message, date in unread_messages:
-            await websocket.send(f"[{date}] User {from_uid}: {message}")
-    else:
-        await websocket.send("目前沒有未讀訊息。")
+    return User(uid, username, websocket)
 
-    return user
+async def login_user(websocket):
+    uid = int(await websocket.recv())
+    raw_password = await websocket.recv()
 
-async def send_history(user):
+    cursor.execute("SELECT username, password FROM Users WHERE uid = ?", (uid,))
+    user_data = cursor.fetchone()
+    if not user_data:
+        await websocket.send("login_error")
+        print(f"UID {uid} 未註冊")
+        return None
+    
+    username, stored_password = user_data
+    
+    if not bcrypt.checkpw(raw_password.encode('utf-8'), stored_password):
+        await websocket.send("login_error")
+        print(f"{username} ({uid}) 密碼錯誤")
+        return None
+
+    await websocket.send(username)
+    print(f"{username} ({uid}) 已登入")
+    return User(uid, username, websocket)
+
+async def send_history(user, room_id):
     cursor.execute(
-        "SELECT from_uid, to_uid, message, date, read FROM Messages WHERE from_uid = ? OR to_uid = ?",
-        (user.uid, user.uid)
+        "SELECT from_uid, to_room_id, message, date, read FROM Messages WHERE to_room_id = ?",
+        (room_id, )
     )
     history = cursor.fetchall()
+    response = ""
 
     if history:
-        await user.websocket.send("歷史訊息紀錄：")
-        for from_uid, to_uid, msg, date, read in history:
-            await user.websocket.send(f"[{date}] User {from_uid} -> User {to_uid}: {msg} ({'已讀' if read else '未讀'})")
+        for from_uid, to_room_id, msg, date, read in history:
+            from_user = await find_user_by_uid(from_uid)
+            to_room = await find_room_by_roomid(to_room_id)
+            response += f"{to_room.room_name} {from_user.username} {msg} {date} {'已讀' if read else '未讀'}\n"
         
-        await mark_messages_as_read(user.uid)
+        await mark_messages_as_read(room_id)
     else:
-        await user.websocket.send("沒有歷史訊息。")
+        response = "無歷史訊息"
 
+    await user.websocket.send(response)
+
+async def get_user_list(user):
+    cursor.execute("SELECT * FROM Users")
+    users = cursor.fetchall()
+    response = ""
+
+    for uid, username in users:
+        if uid in connected_users:
+            response += f"{uid} {username} isOnline\n"
+        else:
+            response += f"{uid} {username}\n"
+
+    await user.websocket.send(response)
+
+async def get_room_list(user):
+    cursor.execute("SELECT * FROM Rooms WHERE room_id IN (SELECT room_id FROM RoomMembers WHERE uid = ?)", (user.uid,))
+    rooms = cursor.fetchall()
+    response = ""
+
+    for room_id, room_name in rooms:
+        response += f"{room_id} {room_name}\n"
+
+    await user.websocket.send(response)
 
 async def handle_message(user):
     try:
         async for message in user.websocket:
             print(f"Received message from {user.username}: {message}")
-            if message == "history":
-                print(f"{user.username} requested message history")
-                await send_history(user)
-            elif '|' in message:
-                print(f"{user.username} sent a message")
-                target_uid, msg_content = message.split('|', 1)
-                target_user = await find_user_by_uid(target_uid)
-
-                if target_user is not None:
-                    formatted_message = Message(user.uid, target_user.uid, msg_content)
-                    print(formatted_message.format_message())
-
-                    if target_user.websocket:
-                        await target_user.websocket.send(formatted_message.format_message())
-                    else:
-                        print(f"Cannot send message to {target_user.username} ({target_user.uid})")
-
-                    formatted_message.save_to_db()
-                    print("message send success")
+            if message.startswith("send_message"):
+                _, to_room_id, msg = message.split(" ", 2)
+                if find_room_by_roomid(to_room_id):
+                    message = Message(user.uid, to_room_id.uid, msg, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+                    message.save_to_db()
+                    await user.websocket.send("訊息已發送")
                 else:
-                    print("target user not found")
-                    await user.websocket.send(f"使用者 UID {target_uid} 不存在")
-            elif message == "find":
-                print(f"{user.username} requested user list")
-                cursor.execute("SELECT * FROM Users")
-                users = cursor.fetchall()
-
-                await user.websocket.send("使用者列表：")
-                for uid, username in users:
-                    await user.websocket.send(f"UID: {uid}, 使用者名稱: {username} {'(上線中)' if connected_users.get(str(uid)) else ''}")
-            elif message == "quit":
-                break
-            else:
-                await user.websocket.send("無效指令。")
+                    await user.websocket.send("無效使用者。")
+            elif message.startswith("get_messages_history"):
+                _, room_id = message.split(" ")
+                await send_history(user, room_id)
+            elif message.startswith("get_unread_messages"):
+                _, room_id = message.split(" ")
+                await get_unread_messages(user, room_id)
+            elif message == "get_user_list":
+                await get_user_list(user)
+            elif message == "get_room_list":
+                await get_room_list(user)
     except websockets.ConnectionClosed:
         print(f"{user.username} 離線")
         connected_users.pop(user.uid)
 
 async def main():
     async with websockets.serve(main_handler, "0.0.0.0", 12345):
+        print("伺服器已啟動，等待連線...")
+        await asyncio.Future()
+
+async def main_handler(websocket):
+    try:
+        # 註冊或登入邏輯
+        operation = await websocket.recv()
+        if operation == "register":
+            user = await register_user(websocket)
+        elif operation == "login":
+            user = await login_user(websocket)
+        else:
+            await websocket.send("未知操作，連線結束")
+            return
+
+        if user:
+            connected_users[user.uid] = user
+            await handle_message(user)
+    except Exception as e:
+        print(f"處理連線時發生錯誤: {e}")
+    finally:
+        # 清理已斷開的用戶
+        if user.uid in connected_users:
+            del connected_users[user.uid]
+            print(f"用戶 {user.username} 已斷開連線")
+
+async def websocket_server():
+    """啟動 WebSocket 伺服器"""
+    async with websockets.serve(main_handler, "0.0.0.0", 12345):
         print("WebSocket 伺服器已啟動，等待連線...")
         await asyncio.Future()  # 保持伺服器運行
-
-async def main_handler(websocket, path):
-    user = await register_user(websocket)
-    await handle_message(user)
-
-users = []
 
 if __name__ == "__main__":
     asyncio.run(main())
