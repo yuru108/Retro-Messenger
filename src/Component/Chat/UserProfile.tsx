@@ -1,15 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Modal from './Modal'; // 匯入彈窗元件
 import { useNavigate } from 'react-router-dom';
+import GroupCreationModal from './GroupCreationModal'; // 匯入群組創建模態元件
 
 type UserProfileProps = {
     uid: string;            // 使用者的 UID
     onLogout: () => void;   // 登出的回調函數
+    users: { username: string }[]; // 新增 users 資料型別
 };
 
-const UserProfile: React.FC<UserProfileProps> = ({ uid, onLogout }) => {
+const UserProfile: React.FC<UserProfileProps> = ({ uid, onLogout, users }) => {
     const [isDropdownOpen, setIsDropdownOpen] = useState(false); // 控制下拉選單是否開啟
-    const [isModalOpen, setIsModalOpen] = useState(false);       // 控制彈窗是否開啟
+    const [isModalOpen, setIsModalOpen] = useState(false);       // 控制登出彈窗是否開啟
+    const [isGroupModalOpen, setIsGroupModalOpen] = useState(false); // 控制群組創建彈窗是否開啟
     const [username, setUsername] = useState<string | null>(null); // 儲存使用者名稱
     const dropdownRef = useRef<HTMLDivElement | null>(null);     // 下拉選單的參考
     const buttonRef = useRef<HTMLDivElement | null>(null);       // 點擊按鈕的參考
@@ -47,7 +50,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ uid, onLogout }) => {
 
     // 處理登出按鈕的點擊
     const handleLogout = () => {
-        setIsModalOpen(true); // 打開彈窗
+        setIsModalOpen(true); // 打開登出彈窗
     };
 
     // 確認登出
@@ -66,6 +69,18 @@ const UserProfile: React.FC<UserProfileProps> = ({ uid, onLogout }) => {
     const handleSettings = () => {
         setIsDropdownOpen(false); // 關閉下拉選單
         navigate('/settings');    // 導航到設定頁面
+    };
+
+    // 處理點擊建群組選項
+    const handleCreateGroup = () => {
+        setIsDropdownOpen(false); // 關閉下拉選單
+        setIsGroupModalOpen(true); // 顯示群組創建模態框
+    };
+
+    // 處理創建群組
+    const handleCreateGroupCallback = (group: { groupName: string; members: string[] }) => {
+        console.log('Group Created:', group); // 在控制台顯示群組名稱與成員
+        setIsGroupModalOpen(false); // 關閉群組創建模態框
     };
 
     return (
@@ -92,8 +107,14 @@ const UserProfile: React.FC<UserProfileProps> = ({ uid, onLogout }) => {
             {isDropdownOpen && (
                 <div
                     ref={dropdownRef}
-                    className="absolute left-0 -mt-40 w-30 bg-white shadow-md rounded-md border z-20"
+                    className="absolute left-0 bottom-20 w-30 bg-white shadow-md rounded-md border z-20"
                 >
+                    <button
+                        className="w-full text-left py-2 px-4 text-gray-700 hover:bg-gray-100"
+                        onClick={handleCreateGroup} // 點擊開啟群組創建頁面
+                    >
+                        建群組
+                    </button>
                     <button
                         className="w-full text-left py-2 px-4 text-gray-700 hover:bg-gray-100"
                         onClick={handleSettings} // 點擊導向設定頁面
@@ -101,7 +122,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ uid, onLogout }) => {
                         設定
                     </button>
                     <button
-                        className="w-full text-left py-2 px-4 text-gray-700 hover:bg-gray-100"
+                        className="w-full text-left py-2 px-4 text-red-400 hover:bg-gray-100"
                         onClick={handleLogout} // 點擊開啟登出彈窗
                     >
                         登出
@@ -116,6 +137,15 @@ const UserProfile: React.FC<UserProfileProps> = ({ uid, onLogout }) => {
                 onConfirm={confirmLogout} // 確認登出
                 message="確定要登出嗎？"   // 彈窗顯示訊息
             />
+
+            {/* 顯示群組創建模態框 */}
+            {isGroupModalOpen && (
+                <GroupCreationModal
+                    onClose={() => setIsGroupModalOpen(false)} // 關閉群組創建模態框
+                    onCreate={handleCreateGroupCallback} // 創建群組回調
+                    users={users.map(user => user.username)} // 傳遞用戶名稱列表
+                />
+            )}
         </div>
     );
 };

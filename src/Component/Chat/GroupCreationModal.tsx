@@ -1,4 +1,4 @@
-// 還看不到效果，還沒有在 Chat.tsx 中使用這個元件
+
 import React, { useState } from 'react';
 
 // 定義 Props 的類型
@@ -35,9 +35,9 @@ const GroupCreationModal: React.FC<GroupCreationModalProps> = ({ onClose, onCrea
     };
 
     return (
-        <div className="modal bg-white p-4 shadow-lg rounded-lg max-w-md mx-auto">
+        <div className="absolute left-0 bottom-20  bg-white p-4 shadow-lg rounded-lg max-w-md mx-auto z-50">
             {/* 模態標題 */}
-            <h2 className="text-lg font-bold mb-4">Create Group</h2>
+            <h2 className="text-lg font-bold mb-4">建立群組</h2>
             
             {/* 群組名稱輸入框 */}
             <input
@@ -50,7 +50,7 @@ const GroupCreationModal: React.FC<GroupCreationModalProps> = ({ onClose, onCrea
 
             {/* 成員選擇列表 */}
             <div>
-                <h3 className="font-semibold mb-2">Select Members</h3>
+                <h3 className="font-semibold mb-2">選擇成員</h3>
                 {users.map((user) => (
                     <div key={user} className="flex items-center mb-2">
                         {/* 成員選擇複選框 */}
@@ -67,21 +67,22 @@ const GroupCreationModal: React.FC<GroupCreationModalProps> = ({ onClose, onCrea
 
             {/* 操作按鈕 */}
             <div className="mt-4 flex justify-end space-x-2">
-                {/* 創建群組按鈕 */}
-                <button
-                    onClick={handleCreateGroup}
-                    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-                    disabled={!groupName || selectedMembers.length === 0} // 禁用條件：群組名稱為空或未選中任何成員
-                >
-                    Create
-                </button>
-
+                
                 {/* 取消按鈕 */}
                 <button
                     onClick={onClose}
                     className="bg-gray-300 text-black px-4 py-2 rounded hover:bg-gray-400"
                 >
-                    Cancel
+                    取消
+                </button>
+
+                {/* 創建群組按鈕 */}
+                <button
+                    onClick={handleCreateGroup}
+                    className="bg-cyan-500 text-white px-4 py-2 rounded hover:bg-cyan-600"
+                    disabled={!groupName || selectedMembers.length === 0} // 禁用條件：群組名稱為空或未選中任何成員
+                >
+                    確定
                 </button>
             </div>
         </div>
