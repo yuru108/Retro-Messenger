@@ -1,200 +1,166 @@
-import sqlite3
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-import hashlib
-import uuid
-from datetime import datetime
+from flask_socketio import SocketIO
+import asyncio
+import websockets
 
-# 初始化 Flask 應用程式並啟用跨域請求支持
 app = Flask(__name__)
 CORS(app)
+socketio = SocketIO(app, cors_allowed_origins="*")
 
-# 使用者資料儲存（僅在記憶體中，重啟後會清除）
-users = {}
+# WebSocket URI
+WS_SERVER_URI = "ws://127.0.0.1:8000"
 
-# 消息歷史記錄結構（僅供參考，部分記錄儲存在 SQLite 資料庫中）
-message_history = {}
+# Helper to send data to the WebSocket server
+async def send_to_server(event, *args):
+    try:
+        async with websockets.connect(WS_SERVER_URI, ping_interval=20, ping_timeout=10) as websocket:
+            await websocket.send(event)
+            for arg in args:
+                await websocket.send(arg)
+            response = []
+            while True:
+                try:
+                    msg = await asyncio.wait_for(websocket.recv(), timeout=0.5)
+                    response.append(msg)
+                except asyncio.TimeoutError:
+                    break
+            if not response:
+                response.append("Error: No response from server")
+            return response
+    except Exception as e:
+        return [f"Error: {str(e)}"]
 
-# 連接 SQLite 資料庫
-def get_db_connection():
-    """
-    建立並返回 SQLite 資料庫的連線物件。
-    """
-    conn = sqlite3.connect('chat.db')
-    conn.row_factory = sqlite3.Row  # 使返回的結果以字典形式表示
-    return conn
-
-# 初始化 SQLite 資料庫並創建所需資料表
-def init_db():
-    """
-    初始化資料庫，創建 messages 資料表以儲存聊天記錄。
-    """
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS messages (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            from_uid TEXT NOT NULL,
-            to_uid TEXT NOT NULL,
-            message TEXT NOT NULL,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    conn.commit()
-    conn.close()
-
-# 啟動應用程式時初始化資料庫
-init_db()
-
-# 密碼雜湊處理
-def hash_password(password):
-    """
-    使用 SHA-256 將密碼進行不可逆的雜湊處理。
-    """
-    return hashlib.sha256(password.encode()).hexdigest()
-
-# 註冊新使用者
+# API routes
 @app.route('/register', methods=['POST'])
 def register():
     """
-    處理使用者註冊請求。
-    接受參數：username 和 password。
-    返回：成功註冊的 UID。
+    Register a new user
+    Request body: { "username": "username", "password": "password" }
+    Response: { "message": "Registration successful", "username": "username" }
     """
     data = request.json
-    uid = str(uuid.uuid4())  # 為每位新使用者產生唯一 UID
     username = data.get('username')
     password = data.get('password')
 
-    # 檢查所需欄位
     if not username or not password:
         return jsonify({'error': 'Username and password are required'}), 400
 
-    # 檢查使用者名稱是否已被註冊
-    if username in users:
-        return jsonify({'error': 'Username already exists'}), 409
+    result = asyncio.run(send_to_server("register", username, password))
+    if "user_already_exists" in result:
+        return jsonify({'message': "User already exists"}), 400
+    return jsonify({'message': "Registration successful", 'username': result[0]})
 
-    # 儲存新使用者資訊
-    users[username] = {
-        'uid': uid,
-        'username': username,
-        'password': hash_password(password),
-        'isOnline': False,
-    }
-
-    return jsonify({'message': 'Registration successful', 'uid': uid}), 201
-
-# 使用者登入
 @app.route('/login', methods=['POST'])
 def login():
     """
-    處理使用者登入請求。
-    接受參數：username 和 password。
-    返回：成功登入的 UID。
+    Login an existing user
+    Request body: { "username": "username", "password": "password" }
+    Response: { "message": "Login successful", "username": "username" }
     """
     data = request.json
     username = data.get('username')
     password = data.get('password')
 
-    # 檢查所需欄位
     if not username or not password:
         return jsonify({'error': 'Username and password are required'}), 400
 
-    # 確認使用者是否存在及密碼是否正確
-    user = users.get(username)
-    if not user or user['password'] != hash_password(password):
-        return jsonify({'error': 'Invalid username or password'}), 401
+    result = asyncio.run(send_to_server("login", username, password))
+    if "login_error" in result:
+        return jsonify({'message': "Login failed"}), 401
+    return jsonify({'message': "Login successful", 'username': result[0]})
 
-    # 更新狀態為上線
-    user['isOnline'] = True
-    return jsonify({'message': 'Login successful', 'uid': user['uid']}), 200
-
-# 獲取使用者清單
 @app.route('/user-list', methods=['GET'])
-def get_user_list():
+def user_list():
     """
-    返回所有已註冊使用者的清單。
-    包括 UID、使用者名稱以及線上狀態。
+    Get the list of registered users
+    Response: users = [ { "username": "username", "isOnline": true/false }, ... ]
     """
-    user_list = [{'uid': user['uid'], 'username': user['username'], 'isOnline': user['isOnline']} for user in users.values()]
-    return jsonify(user_list)
+    result = asyncio.run(send_to_server("get_user_list"))
+    users = []
+    for user in result:
+        parts = user.split()
+        users.append({'username': parts[0], 'isOnline': parts[-1] == "isOnline"})
+    return jsonify(users)
 
-# 傳送消息
+@app.route('/room-list', methods=['GET'])
+def room_list():
+    """
+    Get the list of chat rooms
+    Request: ?username=username
+    Response: rooms = [ { "room_id": "room_id", "room_name": "room_name" }, ... ]
+    """
+    username = request.args.get('username')
+    if not username:
+        return jsonify({'error': 'Username is required'}), 400
+
+    result = asyncio.run(send_to_server("get_room_list", username))
+    rooms = []
+    for room in result:
+        parts = room.split()
+        rooms.append({'room_id': parts[0], 'room_name': parts[1]})
+    return jsonify(rooms)
+
 @app.route('/send-message', methods=['POST'])
 def send_message():
-    """
-    接收並儲存一條消息。
-    接受參數：from_uid、to_uid、message。
-    返回：成功狀態。
-    """
     data = request.json
-    from_uid = data.get('from')
-    to_uid = data.get('to')
+    from_user = data.get('username')
+    to_room_id = data.get('to_room_id')
     message = data.get('message')
 
-    # 驗證是否有足夠的資料
-    if not from_uid or not to_uid or not message:
+    if not all([from_user, to_room_id, message]):
         return jsonify({'error': 'Invalid data'}), 400
 
-    # 儲存消息到資料庫
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
-        INSERT INTO messages (from_uid, to_uid, message, timestamp)
-        VALUES (?, ?, ?, ?)
-    ''', (from_uid, to_uid, message, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
-    conn.commit()
-    conn.close()
+    result = asyncio.run(send_to_server("send_message", from_user, to_room_id, message))
+    return jsonify({'status': "Message sent" if "訊息已發送" in result else "Failed to send message"})
 
-    return jsonify({'status': 'Message sent successfully'}), 200
-
-# 獲取聊天歷史記錄
 @app.route('/message-history', methods=['GET'])
-def get_message_history():
-    """
-    返回指定雙方的聊天記錄。
-    接受參數：from_uid 和 to_uid。
-    返回：雙方之間的所有消息記錄。
-    """
-    to_uid = request.args.get('to_uid')
-    from_uid = request.args.get('from_uid')
+def history():
+    room_id = request.args.get('room_id')
+    if not room_id:
+        return jsonify({'error': 'Room ID is required'}), 400
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        'SELECT * FROM messages WHERE (from_uid = ? AND to_uid = ?) OR (from_uid = ? AND to_uid = ?)',
-        (from_uid, to_uid, to_uid, from_uid)
-    )
-    messages = cursor.fetchall()
-    conn.close()
+    result = asyncio.run(send_to_server("get_messages_history", room_id))
+    messages = []
+    for message in result:
+        parts = message.split()
+        messages.append({
+            'room_name': parts[0],
+            'from_user': parts[1],
+            'message': parts[2],
+            'date': parts[3],
+            'status': parts[4] == "已讀"
+        })
+    return jsonify(messages)
 
-    # 將結果轉為 JSON 格式
-    message_list = [
-        {'from_uid': msg['from_uid'], 'to_uid': msg['to_uid'], 'message': msg['message'], 'timestamp': msg['timestamp']}
-        for msg in messages
-    ]
-    return jsonify(message_list)
+@app.route('/unread-messages', methods=['GET'])
+def unread_messages():
+    username = request.args.get('username')
+    if not username:
+        return jsonify({'error': 'username is required'}), 400
 
-# 更新使用者狀態
-@app.route('/update-status', methods=['POST'])
-def update_status():
-    """
-    更新指定使用者的線上狀態。
-    接受參數：uid 和 isOnline。
-    返回：成功或錯誤訊息。
-    """
-    data = request.json
-    uid = data.get('uid')
-    is_online = data.get('isOnline')
+    result = asyncio.run(send_to_server("get_unread_messages", username))
+    messages = []
+    for message in result:
+        parts = message.split()
+        messages.append({
+            'room_name': parts[0],
+            'from_user': parts[1],
+            'message': parts[2],
+            'date': parts[3],
+            'status': parts[4] == "已讀"
+        })
+    return jsonify(messages)
 
-    # 更新使用者的線上狀態
-    for user in users.values():
-        if user['uid'] == uid:
-            user['isOnline'] = is_online
-            return jsonify({'status': 'Status updated successfully'}), 200
+# WebSocket events for real-time communication
+@socketio.on('connect')
+def handle_connect():
+    print('Web client connected')
 
-    return jsonify({'error': 'User not found'}), 404
+@socketio.on('disconnect')
+def handle_disconnect():
+    print('Web client disconnected')
 
-# 啟動應用程式
+# Run the Flask-SocketIO server
 if __name__ == '__main__':
-    app.run()
+    socketio.run(app, port=12345, debug=True)
