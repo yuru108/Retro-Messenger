@@ -1,6 +1,6 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO
 import asyncio
 import websockets
 
@@ -14,7 +14,7 @@ WS_SERVER_URI = "ws://127.0.0.1:8000"
 # Helper to send data to the WebSocket server
 async def send_to_server(event, *args):
     try:
-        async with websockets.connect(WS_SERVER_URI) as websocket:
+        async with websockets.connect(WS_SERVER_URI, ping_interval=20, ping_timeout=10) as websocket:
             await websocket.send(event)
             for arg in args:
                 await websocket.send(arg)
@@ -25,6 +25,8 @@ async def send_to_server(event, *args):
                     response.append(msg)
                 except asyncio.TimeoutError:
                     break
+            if not response:
+                response.append("Error: No response from server")
             return response
     except Exception as e:
         return [f"Error: {str(e)}"]
@@ -35,7 +37,7 @@ def register():
     """
     Register a new user
     Request body: { "username": "username", "password": "password" }
-    Response: { "message": "Registration successful", "uid": "user_id" }
+    Response: { "message": "Registration successful", "username": "username" }
     """
     data = request.json
     username = data.get('username')
@@ -47,7 +49,7 @@ def register():
     result = asyncio.run(send_to_server("register", username, password))
     if "user_already_exists" in result:
         return jsonify({'message': "User already exists"}), 400
-    return jsonify({'message': "Registration successful", 'uid': result[0]})
+    return jsonify({'message': "Registration successful", 'username': result[0]})
 
 @app.route('/login', methods=['POST'])
 def login():
@@ -72,13 +74,13 @@ def login():
 def user_list():
     """
     Get the list of registered users
-    Response: users = [ { "uid": "user_id", "username": "username", "isOnline": true/false }, ... ]
+    Response: users = [ { "username": "username", "isOnline": true/false }, ... ]
     """
     result = asyncio.run(send_to_server("get_user_list"))
     users = []
     for user in result:
         parts = user.split()
-        users.append({'uid': parts[0], 'username': parts[1], 'isOnline': parts[-1] == "isOnline"})
+        users.append({'username': parts[0], 'isOnline': parts[-1] == "isOnline"})
     return jsonify(users)
 
 @app.route('/room-list', methods=['GET'])
@@ -90,9 +92,9 @@ def room_list():
     """
     username = request.args.get('username')
     if not username:
-        return jsonify({'error': 'UID is required'}), 400
+        return jsonify({'error': 'Username is required'}), 400
 
-    result = asyncio.run(send_to_server("get_room_list", uid))
+    result = asyncio.run(send_to_server("get_room_list", username))
     rooms = []
     for room in result:
         parts = room.split()
@@ -102,14 +104,14 @@ def room_list():
 @app.route('/send-message', methods=['POST'])
 def send_message():
     data = request.json
-    from_uid = data.get('from_uid')
+    from_user = data.get('username')
     to_room_id = data.get('to_room_id')
     message = data.get('message')
 
-    if not all([from_uid, to_room_id, message]):
+    if not all([from_user, to_room_id, message]):
         return jsonify({'error': 'Invalid data'}), 400
 
-    result = asyncio.run(send_to_server("send_message", from_uid, to_room_id, message))
+    result = asyncio.run(send_to_server("send_message", from_user, to_room_id, message))
     return jsonify({'status': "Message sent" if "訊息已發送" in result else "Failed to send message"})
 
 @app.route('/message-history', methods=['GET'])
@@ -133,11 +135,11 @@ def history():
 
 @app.route('/unread-messages', methods=['GET'])
 def unread_messages():
-    uid = request.args.get('uid')
-    if not uid:
-        return jsonify({'error': 'UID is required'}), 400
+    username = request.args.get('username')
+    if not username:
+        return jsonify({'error': 'username is required'}), 400
 
-    result = asyncio.run(send_to_server("get_unread_messages", uid))
+    result = asyncio.run(send_to_server("get_unread_messages", username))
     messages = []
     for message in result:
         parts = message.split()
@@ -161,4 +163,4 @@ def handle_disconnect():
 
 # Run the Flask-SocketIO server
 if __name__ == '__main__':
-    socketio.run(app, port=5000, debug=True)
+    socketio.run(app, port=12345, debug=True)

@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS RoomMembers (
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS Messages (
     id INTEGER PRIMARY KEY,
-    from_user INTEGER,
+    from_user TEXT,
   	to_room_id INTEGER,
     message TEXT,
     date TEXT,
@@ -122,7 +122,7 @@ async def register_user(websocket):
     # 請求使用者名稱和密碼
     username = await websocket.recv()
     raw_password = await websocket.recv()
-    hashed_password = bcrypt.hashpw(raw_password.encode('utf-8'), bcrypt.gensalt())
+    hashed_password = bcrypt.hashpw(raw_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
     # 檢查使用者是否已存在
     cursor.execute("SELECT username FROM Users WHERE username = ?", (username,))
@@ -134,7 +134,7 @@ async def register_user(websocket):
     # 新增使用者至資料庫
     cursor.execute("INSERT INTO Users (username, password) VALUES (?, ?)", (username, hashed_password))
     conn.commit()
-    await websocket.send(f"註冊成功：{username}")
+    await websocket.send(username)
     print(f"註冊成功：{username}")
 
     # 為新使用者與所有現有使用者建立個人聊天室
@@ -142,6 +142,7 @@ async def register_user(websocket):
     existing_users = cursor.fetchall()
 
     for existing_username in existing_users:
+        existing_username = existing_username[0]
         room_name = f"{username} & {existing_username}"
         cursor.execute("INSERT INTO Rooms (room_name) VALUES (?)", (room_name,))
         room_id = cursor.lastrowid
@@ -168,7 +169,7 @@ async def login_user(websocket):
     
     username, stored_password = user_data
     
-    if not bcrypt.checkpw(raw_password.encode('utf-8'), stored_password):
+    if not bcrypt.checkpw(raw_password.encode('utf-8'), stored_password.encode('utf-8')):
         await websocket.send("login_error")
         print(f"{username} 密碼錯誤")
         return None
@@ -198,6 +199,7 @@ async def send_history(user, room_id):
     await user.websocket.send(response)
 
 async def get_user_list(user):
+    print("Getting user list...")
     cursor.execute("SELECT * FROM Users")
     users = cursor.fetchall()
     response = ""
@@ -208,6 +210,7 @@ async def get_user_list(user):
         else:
             response += f"{username}\n"
 
+    print(f"User list: {response}")
     await user.websocket.send(response)
 
 async def get_room_list(user):
@@ -222,6 +225,7 @@ async def get_room_list(user):
 
 async def handle_message(user):
     try:
+        print(f"Waiting for messages from {user.username}...")
         async for message in user.websocket:
             print(f"Received message from {user.username}: {message}")
             if message.startswith("send_message"):
@@ -238,19 +242,22 @@ async def handle_message(user):
             elif message.startswith("get_unread_messages"):
                 _, room_id = message.split(" ")
                 await get_unread_messages(user, room_id)
-            elif message == "get_user_list":
+            elif message.startswith("get_user_list"):
                 await get_user_list(user)
-            elif message == "get_room_list":
+            elif message.startswith("get_room_list"):
                 await get_room_list(user)
     except websockets.ConnectionClosed:
         print(f"{user.username} 離線")
-        connected_users.pop(user.username)
+    finally:
+        if user.username in connected_users:
+            del connected_users[user.username]
 
 async def main(websocket):
     user = None
     try:
         # 註冊或登入邏輯
         operation = await websocket.recv()
+        print(f"Received operation[main]: {operation}")
         if operation == "register":
             user = await register_user(websocket)
         elif operation == "login":
@@ -261,6 +268,8 @@ async def main(websocket):
 
         if user:
             connected_users[user.username] = user
+            print(f"用戶 {user.username} 已連線")
+
             await handle_message(user)
     except Exception as e:
         print(f"處理連線時發生錯誤: {e}")
