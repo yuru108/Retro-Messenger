@@ -100,6 +100,13 @@ async def find_room_by_roomid(room_id):
         return Room(room[0], room[1])
     return None
 
+async def find_room_by_roomid(room_id):
+    cursor.execute("SELECT * FROM Rooms WHERE room_id = ?", (room_id,))
+    room = cursor.fetchone()
+    if room:
+        return Room(room[0], room[1])
+    return None
+
 async def register_user(websocket):
     """註冊新使用者並建立個人聊天室"""
     # 請求使用者名稱和密碼
