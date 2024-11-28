@@ -1,10 +1,11 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, session
 from flask_cors import CORS
 from flask_socketio import SocketIO
 import asyncio
 import websockets
 
 app = Flask(__name__)
+app.secret_key = "SecretKey"
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
@@ -18,16 +19,13 @@ async def send_to_server(event, *args):
             await websocket.send(event)
             for arg in args:
                 await websocket.send(arg)
-            response = []
             while True:
                 try:
                     msg = await asyncio.wait_for(websocket.recv(), timeout=0.5)
-                    response.append(msg)
+                    print(f"Received message: {msg}")
+                    return msg.split("\n")
                 except asyncio.TimeoutError:
                     break
-            if not response:
-                response.append("Error: No response from server")
-            return response
     except Exception as e:
         return [f"Error: {str(e)}"]
 
@@ -48,8 +46,10 @@ def register():
 
     result = asyncio.run(send_to_server("register", username, password))
     if "user_already_exists" in result:
-        return jsonify({'message': "User already exists"}), 400
-    return jsonify({'message': "Registration successful", 'username': result[0]})
+        return jsonify({'error': "Username already exists"}), 409
+    
+    session['username'] = username
+    return jsonify({'message': "Registration successful", 'username': result[0]}), 201
 
 @app.route('/login', methods=['POST'])
 def login():
@@ -67,8 +67,10 @@ def login():
 
     result = asyncio.run(send_to_server("login", username, password))
     if "login_error" in result:
-        return jsonify({'message': "Login failed"}), 401
-    return jsonify({'message': "Login successful", 'username': result[0]})
+        return jsonify({'error': "Invalid username or password"}), 401
+    
+    session['username'] = username
+    return jsonify({'message': "Login successful", 'username': result[0]}), 200
 
 @app.route('/user-list', methods=['GET'])
 def user_list():
@@ -76,11 +78,18 @@ def user_list():
     Get the list of registered users
     Response: users = [ { "username": "username", "isOnline": true/false }, ... ]
     """
+    if 'username' not in session:
+        return jsonify({'error': 'Please login first'}), 401
+    
     result = asyncio.run(send_to_server("get_user_list"))
     users = []
     for user in result:
         parts = user.split()
-        users.append({'username': parts[0], 'isOnline': parts[-1] == "isOnline"})
+        if len(parts) == 0:
+            continue
+        username = parts[0]
+        is_online = parts[-1] == "isOnline" if len(parts) > 1 else False
+        users.append({'username': username, 'isOnline': is_online})
     return jsonify(users)
 
 @app.route('/room-list', methods=['GET'])
@@ -88,8 +97,11 @@ def room_list():
     """
     Get the list of chat rooms
     Request: ?username=username
-    Response: rooms = [ { "room_id": "room_id", "room_name": "room_name" }, ... ]
+    Response: rooms = [ {"room_id": "room_id", "room_name": "room_name" }, ... ]
     """
+    if 'username' not in session:
+        return jsonify({'error': 'Please login first'}), 401
+
     username = request.args.get('username')
     if not username:
         return jsonify({'error': 'Username is required'}), 400
@@ -98,11 +110,23 @@ def room_list():
     rooms = []
     for room in result:
         parts = room.split()
-        rooms.append({'room_id': parts[0], 'room_name': parts[1]})
+        if len(parts) == 0:
+            continue
+        room_id = parts[0]
+        room_name = parts[1]
+        rooms.append({'room_id': room_id, 'room_name': room_name})
     return jsonify(rooms)
 
 @app.route('/send-message', methods=['POST'])
 def send_message():
+    """
+    Send a message to a chat room
+    Request body: { "username": "username", "to_room_id": "room_id", "message": "message" }
+    Response: { "status": "Message sent" or "Failed to send message" }
+    """
+    if 'username' not in session:
+        return jsonify({'error': 'Please login first'}), 401
+    
     data = request.json
     from_user = data.get('username')
     to_room_id = data.get('to_room_id')
@@ -112,10 +136,20 @@ def send_message():
         return jsonify({'error': 'Invalid data'}), 400
 
     result = asyncio.run(send_to_server("send_message", from_user, to_room_id, message))
-    return jsonify({'status': "Message sent" if "訊息已發送" in result else "Failed to send message"})
+    if "message_sent" in result:
+        return jsonify({'status': "Message sent"}), 200
+    return jsonify({'status': "Failed to send message"}), 400
 
 @app.route('/message-history', methods=['GET'])
 def history():
+    """
+    Get the message history of a chat room
+    Request: ?room_id=room_id
+    Response: messages = [ { "room_name": "room_name", "from_user": "username", "message": "message", "date": "date", "status": true/false }, ... ]
+    """
+    if 'username' not in session:
+        return jsonify({'error': 'Please login first'}), 401
+
     room_id = request.args.get('room_id')
     if not room_id:
         return jsonify({'error': 'Room ID is required'}), 400
@@ -135,6 +169,14 @@ def history():
 
 @app.route('/unread-messages', methods=['GET'])
 def unread_messages():
+    """
+    Get the unread messages of a user
+    Request: ?username=username
+    Response: messages = [ { "room_name": "room_name", "from_user": "username", "message": "message", "date": "date", "status": true/false }, ... ]
+    """
+    if 'username' not in session:
+        return jsonify({'error': 'Please login first'}), 401
+
     username = request.args.get('username')
     if not username:
         return jsonify({'error': 'username is required'}), 400
