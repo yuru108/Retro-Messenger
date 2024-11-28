@@ -209,6 +209,28 @@ def unread_messages():
         })
     return jsonify(messages)
 
+@app.route('/change-room-name', methods=['POST'])
+def change_room_name():
+    """
+    Change the name of a chat room
+    Request body: { "room_id": "room_id", "room_name": "room_name" }
+    Response: { "status": "Room name changed" or "Failed to change room name" }
+    """
+    if 'username' not in session:
+        return jsonify({'error': 'Please login first'}), 401
+
+    data = request.json
+    room_id = data.get('room_id')
+    room_name = data.get('room_name')
+
+    if not all([room_id, room_name]):
+        return jsonify({'error': 'Invalid data'}), 400
+
+    result = asyncio.run(send_to_server("change_room_name", room_id, room_name))
+    if "room_name_changed" in result:
+        return jsonify({'status': "Room name changed"}), 200
+    return jsonify({'status': "Failed to change room name"}), 400
+
 # WebSocket events for real-time communication
 @socketio.on('connect')
 def handle_connect():
