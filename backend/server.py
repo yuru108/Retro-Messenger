@@ -77,27 +77,10 @@ class Message:
 
 connected_users = {}
 
-async def get_unread_messages(user, username):
+async def mark_messages_as_read(room_id, username):
     cursor.execute(
-        "SELECT from_user, message, date FROM Messages from_user == ? AND read = 0",
-        (username)
-    )
-    message = cursor.fetchall()
-
-    if message:
-        for from_user, to_room_id, msg, date, read in message:
-            from_user = await find_user_by_name(from_user)
-            to_room = await find_room_by_roomid(to_room_id)
-            response += f"{to_room.room_name} {from_user.username} {msg} {date} {'已讀' if read else '未讀'}\n"
-    else:
-        response = None
-
-    await user.websocket.send(response)
-
-async def mark_messages_as_read(room_id):
-    cursor.execute(
-        "UPDATE Messages SET read = 1 WHERE to_room_id = ? AND read = 0",
-        (room_id,)
+        "UPDATE Messages SET read = 1 WHERE to_room_id = ? AND from_user != ? AND read = 0",
+        (username, room_id,)
     )
     conn.commit()
 
@@ -178,7 +161,7 @@ async def login_user(websocket):
     print(f"{username} 已登入")
     return User(username, websocket)
 
-async def send_history(user, room_id):
+async def send_history(user, room_id, username):
     cursor.execute(
         "SELECT from_user, to_room_id, message, date, read FROM Messages WHERE to_room_id = ?",
         (room_id, )
@@ -190,16 +173,15 @@ async def send_history(user, room_id):
         for from_user, to_room_id, msg, date, read in history:
             from_user = await find_user_by_name(from_user)
             to_room = await find_room_by_roomid(to_room_id)
-            response += f"{to_room.room_name} {from_user.username} {msg} {date} {'已讀' if read else '未讀'}\n"
+            response += f"{to_room.room_name}|{from_user.username}|{msg}|{date}|{'已讀' if read else '未讀'}\n"
         
-        await mark_messages_as_read(room_id)
+        await mark_messages_as_read(room_id, username)
     else:
-        response = "無歷史訊息"
+        response = "no_messages"
 
     await user.websocket.send(response)
 
 async def get_user_list(user):
-    print("Getting user list...")
     cursor.execute("SELECT * FROM Users")
     users = cursor.fetchall()
     response = ""
@@ -210,8 +192,6 @@ async def get_user_list(user):
             response += f"{username} isOnline\n"
         else:
             response += f"{username}\n"
-
-    print(f"User list: {response}")
     await user.websocket.send(response)
 
 async def get_room_list(user, username):
@@ -221,6 +201,24 @@ async def get_room_list(user, username):
 
     for room_id, room_name in rooms:
         response += f"{room_id} {room_name}\n"
+
+    await user.websocket.send(response)
+
+async def get_unread_messages(user, username):
+    cursor.execute(
+        "SELECT from_user, to_room_id, message, date, read FROM Messages WHERE to_room_id IN (SELECT room_id FROM RoomMembers WHERE username = ?) AND read = 0",
+        (username, )
+    )
+    message = cursor.fetchall()
+
+    response = ""
+    if message:
+        for from_user, to_room_id, msg, date, read in message:
+            from_user = await find_user_by_name(from_user)
+            to_room = await find_room_by_roomid(to_room_id)
+            response += f"{to_room.room_name}|{from_user.username}|{msg}|{date}|{'已讀' if read else '未讀'}\n"
+    else:
+        response = "no_messages"
 
     await user.websocket.send(response)
 
@@ -243,17 +241,19 @@ async def main(websocket):
             connected_users[user.username] = user
             print(f"用戶 {user.username} 已連線")
         elif operation.startswith("send_message"):
+            from_user = await websocket.recv()
             to_room_id = await websocket.recv()
             msg = await websocket.recv()
-            if find_room_by_roomid(to_room_id):
-                message_obj = Message(user.username, to_room_id, msg, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+            if await find_room_by_roomid(to_room_id):
+                message_obj = Message(from_user, to_room_id, msg)
                 message_obj.save_to_db()
-                await user.websocket.send("massage_sent")
+                await user.websocket.send("message_sent")
             else:
-                await user.websocket.send("massage_failed")
+                await user.websocket.send("message_failed")
         elif operation.startswith("get_messages_history"):
             room_id = await websocket.recv()
-            await send_history(user, room_id)
+            username = await websocket.recv()
+            await send_history(user, room_id, username)
         elif operation.startswith("get_unread_messages"):
             username = await websocket.recv()
             await get_unread_messages(user, username)
