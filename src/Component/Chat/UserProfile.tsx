@@ -4,27 +4,18 @@ import { useNavigate } from 'react-router-dom';
 import GroupCreationModal from './GroupCreationModal'; // 匯入群組創建模態元件
 
 type UserProfileProps = {
-    uid: string;            // 使用者的 UID
-    onLogout: () => void;   // 登出的回調函數
+    username: string;        // 使用者名稱
+    onLogout: () => void;    // 登出的回調函數
     users: { username: string }[]; // 新增 users 資料型別
 };
 
-const UserProfile: React.FC<UserProfileProps> = ({ uid, onLogout, users }) => {
+const UserProfile: React.FC<UserProfileProps> = ({ username, onLogout, users }) => {
     const [isDropdownOpen, setIsDropdownOpen] = useState(false); // 控制下拉選單是否開啟
     const [isModalOpen, setIsModalOpen] = useState(false);       // 控制登出彈窗是否開啟
     const [isGroupModalOpen, setIsGroupModalOpen] = useState(false); // 控制群組創建彈窗是否開啟
-    const [username, setUsername] = useState<string | null>(null); // 儲存使用者名稱
     const dropdownRef = useRef<HTMLDivElement | null>(null);     // 下拉選單的參考
     const buttonRef = useRef<HTMLDivElement | null>(null);       // 點擊按鈕的參考
     const navigate = useNavigate(); // 用於頁面導航
-
-    // 從 localStorage 取得使用者名稱
-    useEffect(() => {
-        const storedUsername = localStorage.getItem('username');
-        if (storedUsername) {
-            setUsername(storedUsername);
-        }
-    }, []);
 
     // 監聽點擊事件，檢測是否點擊在下拉選單外部
     useEffect(() => {
@@ -89,16 +80,13 @@ const UserProfile: React.FC<UserProfileProps> = ({ uid, onLogout, users }) => {
             <div className="flex items-center cursor-pointer" ref={buttonRef} onClick={toggleDropdown}>
                 {/* 頭像 */}
                 <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
-                    <span className="text-white text-sm">{uid[0]}</span> {/* 顯示 UID 的第一個字元 */}
+                    <span className="text-white text-sm">{username[0]}</span> {/* 顯示使用者名稱的第一個字元 */}
                 </div>
 
-                {/* 使用者名稱與 UID */}
+                {/* 使用者名稱 */}
                 <div className="ml-4">
                     <div className="text-gray-800 font-medium">
                         {username || 'No Username'} {/* 預設顯示 "No Username" */}
-                    </div>
-                    <div className="text-gray-500 text-sm">
-                        {uid}
                     </div>
                 </div>
             </div>
