@@ -197,4 +197,4 @@ def update_status():
 
 # 啟動應用程式
 if __name__ == '__main__':
-    app.run(port=12345)
+    app.run()

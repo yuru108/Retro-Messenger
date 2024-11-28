@@ -289,4 +289,4 @@ async def websocket_server():
         await asyncio.Future()  # 保持伺服器運行
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(websocket_server())
