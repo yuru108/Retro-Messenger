@@ -102,38 +102,35 @@ const ChatRoom: React.FC = () => {
     return (
         <div className="flex h-screen">
             {/* 用戶列表區域 */}
-            <div className="w-64 min-w-[150px] bg-gray-100 p-4 overflow-y-auto flex flex-col h-full">
-                {/* 用戶列表 */}
+            <div className="w-64 min-w-[150px] bg-gray-100 p-4 overflow-y-auto flex flex-col h-full flex-shrink-0">
                 <UserList 
                     users={users} 
-                    onSelectUser={setSelectedUser} // 設定選中的聊天對象
-                    selectedUser={selectedUser} // 傳入當前選中的用戶
-                    className="flex-grow" // 讓 UserList 占據剩餘空間
+                    onSelectUser={setSelectedUser}
+                    selectedUser={selectedUser} 
+                    className="flex-grow"
                 />
-                
-                {/* 用戶頭像與登出按鈕 */}
                 <div className="mt-auto">
                     <UserProfile 
-                        username={username} // 傳入當前用戶的 username
-                        onLogout={handleLogout} // 傳入登出處理函數
-                        users={users} // 傳遞 users 資料給 UserProfile
+                        username={username}
+                        onLogout={handleLogout}
+                        users={users}
                     />
                 </div>
             </div>
 
             {/* 聊天區域 */}
             <div className="flex-grow flex flex-col">
-                {/* 當有選中用戶時顯示聊天區域 */}
                 {selectedUser && (
                     <ChatArea
-                        selectedUser={selectedUser} // 傳入選中的聊天對象
-                        username={username} // 傳入當前用戶的 username
-                        messages={messages[selectedUser] || []} // 傳入與該用戶的聊天訊息
-                        onSendMessage={sendMessage} // 傳入發送訊息的處理函數
+                        selectedUser={selectedUser}
+                        username={username}
+                        messages={messages[selectedUser] || []}
+                        onSendMessage={sendMessage}
                     />
                 )}
             </div>
         </div>
+
     );
 };
 
