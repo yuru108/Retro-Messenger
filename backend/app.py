@@ -22,7 +22,7 @@ async def send_to_server(event, *args):
             while True:
                 try:
                     msg = await asyncio.wait_for(websocket.recv(), timeout=0.5)
-                    print(f"Received message: {msg}")
+                    print(f"Received message:\n{msg}")
                     return msg.split("\n")
                 except asyncio.TimeoutError:
                     break
@@ -109,8 +109,8 @@ def room_list():
     result = asyncio.run(send_to_server("get_room_list", username))
     rooms = []
     for room in result:
-        parts = room.split()
-        if len(parts) == 0:
+        parts = room.split(maxsplit=1)
+        if len(parts) < 2:
             continue
         room_id = parts[0]
         room_name = parts[1]
@@ -144,26 +144,34 @@ def send_message():
 def history():
     """
     Get the message history of a chat room
-    Request: ?room_id=room_id
+    Request: ?room_id=room_id&username=username
     Response: messages = [ { "room_name": "room_name", "from_user": "username", "message": "message", "date": "date", "status": true/false }, ... ]
     """
     if 'username' not in session:
         return jsonify({'error': 'Please login first'}), 401
 
     room_id = request.args.get('room_id')
-    if not room_id:
-        return jsonify({'error': 'Room ID is required'}), 400
+    username = request.args.get('username')
+    if not room_id or not username:
+        return jsonify({'error': 'Room ID and username is required'}), 400
 
-    result = asyncio.run(send_to_server("get_messages_history", room_id))
+    result = asyncio.run(send_to_server("get_messages_history", room_id, username))
+
+    if "no_messages" in result:
+        return jsonify({'message': 'No messages found'})
+    
     messages = []
     for message in result:
-        parts = message.split()
+        parts = message.split("|")
+        if len(parts) < 5:
+            continue
+        room_name, from_user, msg, date, status = parts
         messages.append({
-            'room_name': parts[0],
-            'from_user': parts[1],
-            'message': parts[2],
-            'date': parts[3],
-            'status': parts[4] == "已讀"
+            'room_name': room_name,
+            'from_user': from_user,
+            'message': msg,
+            'date': date,
+            'status': status == "已讀"
         })
     return jsonify(messages)
 
@@ -182,15 +190,22 @@ def unread_messages():
         return jsonify({'error': 'username is required'}), 400
 
     result = asyncio.run(send_to_server("get_unread_messages", username))
+    
+    if "no_messages" in result:
+        return jsonify({'message': 'No messages found'})
+    
     messages = []
     for message in result:
-        parts = message.split()
+        parts = message.split("|")
+        if len(parts) < 5:
+            continue
+        room_name, from_user, msg, date, status = parts
         messages.append({
-            'room_name': parts[0],
-            'from_user': parts[1],
-            'message': parts[2],
-            'date': parts[3],
-            'status': parts[4] == "已讀"
+            'room_name': room_name,
+            'from_user': from_user,
+            'message': msg,
+            'date': date,
+            'status': status == "已讀"
         })
     return jsonify(messages)
 
