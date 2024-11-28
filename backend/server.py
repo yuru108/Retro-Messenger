@@ -77,10 +77,10 @@ class Message:
 
 connected_users = {}
 
-async def get_unread_messages(user, room_id):
+async def get_unread_messages(user, username):
     cursor.execute(
-        "SELECT from_user, message, date FROM Messages WHERE to_room_id = ? AND from_user != ? AND read = 0",
-        (room_id, user.username)
+        "SELECT from_user, message, date FROM Messages from_user == ? AND read = 0",
+        (username)
     )
     message = cursor.fetchall()
 
@@ -212,6 +212,7 @@ async def get_user_list(user):
     response = ""
 
     for username in users:
+        username = username[0]
         if username in connected_users:
             response += f"{username} isOnline\n"
         else:
@@ -220,8 +221,8 @@ async def get_user_list(user):
     print(f"User list: {response}")
     await user.websocket.send(response)
 
-async def get_room_list(user):
-    cursor.execute("SELECT * FROM Rooms WHERE room_id IN (SELECT room_id FROM RoomMembers WHERE username = ?)", (user.username,))
+async def get_room_list(user, username):
+    cursor.execute("SELECT * FROM Rooms WHERE room_id IN (SELECT room_id FROM RoomMembers WHERE username = ?)", (username,))
     rooms = cursor.fetchall()
     response = ""
 
@@ -230,61 +231,51 @@ async def get_room_list(user):
 
     await user.websocket.send(response)
 
-async def handle_message(user):
-    try:
-        print(f"Waiting for messages from {user.username}...")
-        async for message in user.websocket:
-            print(f"Received message from {user.username}: {message}")
-            if message.startswith("send_message"):
-                _, to_room_id, msg = message.split(" ", 2)
-                if find_room_by_roomid(to_room_id):
-                    message = Message(user.username, to_room_id, msg, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-                    message.save_to_db()
-                    await user.websocket.send("訊息已發送")
-                else:
-                    await user.websocket.send("無效使用者。")
-            elif message.startswith("get_messages_history"):
-                _, room_id = message.split(" ")
-                await send_history(user, room_id)
-            elif message.startswith("get_unread_messages"):
-                _, room_id = message.split(" ")
-                await get_unread_messages(user, room_id)
-            elif message.startswith("get_user_list"):
-                await get_user_list(user)
-            elif message.startswith("get_room_list"):
-                await get_room_list(user)
-    except websockets.ConnectionClosed:
-        print(f"{user.username} 離線")
-    finally:
-        if user.username in connected_users:
-            del connected_users[user.username]
-
 async def main(websocket):
-    user = None
+    user = User(None, websocket)
     try:
-        # 註冊或登入邏輯
         operation = await websocket.recv()
-        print(f"Received operation[main]: {operation}")
+        print(f"Received operation: {operation}")
+
         if operation == "register":
             user = await register_user(websocket)
-        elif operation == "login":
-            user = await login_user(websocket)
-        else:
-            await websocket.send("未知操作，連線結束")
-            return
 
-        if user:
+            # add user to connected users list
             connected_users[user.username] = user
             print(f"用戶 {user.username} 已連線")
+        elif operation == "login":
+            user = await login_user(websocket)
 
-            await handle_message(user)
+            # add user to connected users list
+            connected_users[user.username] = user
+            print(f"用戶 {user.username} 已連線")
+        elif operation.startswith("send_message"):
+            to_room_id = await websocket.recv()
+            msg = await websocket.recv()
+            if find_room_by_roomid(to_room_id):
+                message_obj = Message(user.username, to_room_id, msg, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+                message_obj.save_to_db()
+                await user.websocket.send("massage_sent")
+            else:
+                await user.websocket.send("massage_failed")
+        elif operation.startswith("get_messages_history"):
+            room_id = await websocket.recv()
+            await send_history(user, room_id)
+        elif operation.startswith("get_unread_messages"):
+            username = await websocket.recv()
+            await get_unread_messages(user, username)
+        elif operation.startswith("get_user_list"):
+            await get_user_list(user)
+        elif operation.startswith("get_room_list"):
+            username = await websocket.recv()
+            await get_room_list(user, username)
+        else:
+            print("Unknown operation")
+            return
+    except websockets.ConnectionClosed:
+        print(f"{user.username if user else 'Unknown user'}'s connection is closed")
     except Exception as e:
-        print(f"處理連線時發生錯誤: {e}")
-    finally:
-        # 清理已斷開的用戶
-        if user and user.username in connected_users:
-            del connected_users[user.username]
-            print(f"用戶 {user.username} 已斷開連線")
+        print(f"Error: {e}")
 
 async def websocket_server():
     """啟動 WebSocket 伺服器"""
