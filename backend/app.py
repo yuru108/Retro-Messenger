@@ -1,6 +1,6 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-from flask_socketio import SocketIO
+from flask_socketio import SocketIO, emit
 import server
 
 app = Flask(__name__)
@@ -178,6 +178,18 @@ def create_room():
     
     result = server.create_room(room_name, userlist)
     return jsonify(result), 200
+
+def room_list_update(username):
+    """
+    Push the updated room list to a specific user
+    """
+    print("Updating room list for", username)
+
+    if username:
+        room_list = server.get_room_list(username)
+        socketio.emit('room_list_update', room_list, to=username)
+    else:
+        print("No username provided for room list update")
 
 # Run the Flask-SocketIO server
 if __name__ == '__main__':
