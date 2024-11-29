@@ -29,6 +29,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({ selectedUser, username, messages, o
 
     // 傳送訊息
     const sendMessage = () => {
+        console.log("selectedUser:", selectedUser);
+        console.log("input:", input);
+        console.log("socket:", socket);
         if (selectedUser && input.trim() !== '' && socket) {
             const time = new Date().toLocaleString(); // 使用本地時間
             const messageData: ChatMessage = {

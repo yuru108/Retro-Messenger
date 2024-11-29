@@ -77,7 +77,7 @@ class Message:
 def mark_messages_as_read(room_id, username):
     cursor.execute(
         "UPDATE Messages SET read = 1 WHERE to_room_id = ? AND from_user != ? AND read = 0",
-        (username, room_id,)
+        (room_id, username,)
     )
     conn.commit()
 

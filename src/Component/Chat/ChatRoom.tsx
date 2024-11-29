@@ -71,6 +71,7 @@ const ChatRoom: React.FC<{ socket: WebSocket | null }> = ({ socket }) => {
 
     // 當選擇用戶時，設置對應的 roomId
     const handleSelectUser = (username: string) => {
+        
         setSelectedUser(username);  // 設置 selectedUser 為選中的 username
         // 根據選中的 username 設置對應的 roomId
         const selectedRoom = users.find(user => user.username === username);
@@ -82,19 +83,25 @@ const ChatRoom: React.FC<{ socket: WebSocket | null }> = ({ socket }) => {
     const sendMessage = useCallback(async (message: ChatMessage) => {
         console.log("selectedUser:", selectedUser);
         console.log("roomId:", roomId); // 確保 roomId 已經正確設置
-
+    
         if (roomId) { // 這裡檢查 roomId 是否存在
             const newMessage = {
                 from: username,
                 content: message.content,
                 time: new Date().toLocaleString(),
-                read: true,
+                read: false,
             };
-            setMessages((prev) => ({
-                ...prev,
-                [roomId]: [...(prev[roomId] || []), newMessage], // 根據 roomId 更新訊息
-            }));
-
+            
+            // 更新訊息狀態，顯示發送的訊息
+            setMessages((prev) => {
+                const updatedMessages = {
+                    ...prev,
+                    [roomId]: [...(prev[roomId] || []), newMessage], // 根據 roomId 更新訊息
+                };
+                console.log("Updated messages:", updatedMessages); // 檢查更新後的 messages
+                return updatedMessages;
+            });
+    
             try {
                 const response = await fetch("http://127.0.0.1:12345/send-message", {
                     method: "POST",
@@ -107,13 +114,13 @@ const ChatRoom: React.FC<{ socket: WebSocket | null }> = ({ socket }) => {
                         message: message.content,
                     }),
                 });
-
+    
                 console.log({
                     username,
                     to_room_id: roomId,
                     message: message.content
                 });
-
+    
                 if (!response.ok) {
                     const errorData = await response.json();
                     throw new Error(errorData.error || 'Failed to send message');
@@ -123,6 +130,7 @@ const ChatRoom: React.FC<{ socket: WebSocket | null }> = ({ socket }) => {
             }
         }
     }, [selectedUser, roomId, username]);
+    
 
     const loadMessageHistory = async (roomId: string, username: string) => {
         try {
@@ -162,6 +170,27 @@ const ChatRoom: React.FC<{ socket: WebSocket | null }> = ({ socket }) => {
         } else {
             console.warn("Missing room ID or username here.");
         }
+
+        socket.on('history_update', (message) => {
+            console.log("Received message:", message);
+            setMessages((prev) => {
+                const updatedMessages = {
+                    ...prev,
+                    [message.room_id]: [...(prev[message.room_id] || []), {
+                        from: message.from_user,
+                        content: message.message,
+                        time: new Date(message.date).toLocaleString(),
+                        read: message.status
+                    }]
+                };
+                console.log("Updated messages:", updatedMessages);
+                return updatedMessages;
+            });
+        });
+
+        return () => {
+            socket.off('history_update');
+        };
     }, [roomId, username]);
 
     const loadUnreadMessages = async () => {
@@ -206,7 +235,7 @@ const ChatRoom: React.FC<{ socket: WebSocket | null }> = ({ socket }) => {
                         socket={socket}
                         selectedUser={selectedUser}
                         username={username}
-                        messages={messages[selectedUser] || []}
+                        messages={messages[roomId] || []} // 使用 roomId 來獲取正確的訊息
                         onSendMessage={sendMessage}
                     />
                 )}

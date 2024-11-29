@@ -109,6 +109,7 @@ def send_message():
 
     result = server.send_message(from_user, to_room_id, message)
     if result == "message_sent":
+        history_update(to_room_id, from_user)
         return jsonify({'status': 'Message sent'}), 200
     else:
         return jsonify({'status': 'Failed to send message'}), 500
@@ -190,6 +191,18 @@ def room_list_update(username):
         socketio.emit('room_list_update', room_list, to=username)
     else:
         print("No username provided for room list update")
+
+def history_update(room_id, username):
+    """
+    Push the updated message history to a specific user
+    """
+    print("Updating history for", room_id, "for", username)
+
+    if room_id and username:
+        message = server.get_history(room_id, username)
+        socketio.emit('history_update', message, to=username)
+    else:
+        print("No room ID or username provided for history update")
 
 # Run the Flask-SocketIO server
 if __name__ == '__main__':
