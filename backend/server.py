@@ -72,8 +72,6 @@ class Message:
         )
         conn.commit()
 
-connected_users = {}
-
 def mark_messages_as_read(room_id, username):
     cursor.execute(
         "UPDATE Messages SET read = 1 WHERE to_room_id = ? AND from_user != ? AND read = 0",
@@ -85,8 +83,6 @@ def find_user_by_name(username):
     cursor.execute("SELECT * FROM Users WHERE username = ?", (username,))
     user = cursor.fetchone()
     if user:
-        if connected_users.get(str(user[0])):
-            return connected_users[str(user[0])]
         return User(user[0])
     return None
 
@@ -183,7 +179,7 @@ def get_user_list():
         username = username[0]
         response.append({
             "username": username,
-            "isOnline": username in connected_users
+            "isOnline": None
         })
     
     return response

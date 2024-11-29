@@ -1,12 +1,29 @@
 from flask import Flask, jsonify, request, session
 from flask_cors import CORS
-from flask_socketio import SocketIO
+from flask_socketio import SocketIO, emit
 import server
 
 app = Flask(__name__)
 app.secret_key = "SecretKey"
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
+
+active_connections = {}
+
+@socketio.on('connect')
+def on_connect():
+    username = session.get('username')
+    if username:
+        active_connections[username] = request.sid
+        print(f"User {username} connected with SID {request.sid}")
+
+@socketio.on('disconnect')
+def on_disconnect():
+    for username, sid in list(active_connections.items()):
+        if sid == request.sid:
+            del active_connections[username]
+            print(f"User {username} disconnected")
+            break
 
 # API routes
 @app.route('/register', methods=['POST'])
@@ -27,7 +44,6 @@ def register():
     if "user_already_exists" in result:
         return jsonify({'error': "Username already exists"}), 409
     
-    session['username'] = username
     return jsonify({'message': "Registration successful", 'username': username}), 201
 
 @app.route('/login', methods=['POST'])
@@ -51,19 +67,46 @@ def login():
     session['username'] = username
     return jsonify({'message': "Login successful", 'username': username}), 200
 
-@app.route('/user-list', methods=['GET'])
+@app.route('/logout', methods=['POST'])
+def logout():
+    """
+    Logout the current user
+    Response: { "message": "Logout successful" }
+    """
+    if 'username' not in session:
+        return jsonify({'error': 'No active session'}), 400
+
+    data = request.json
+    username = data.get('username')
+
+    if not username:
+        return jsonify({'error': 'Username is required'}), 400
+
+    if username and username == session['username']:
+        session.pop('username', None)
+        print(f"User {username} logged out and disconnected")
+        return jsonify({'message': "Logout successful"}), 200
+
+@socketio.on('get_user_list')
 def user_list():
     """
     Get the list of registered users
-    Response: users = [ { "username": "username", "isOnline": true/false }, ... ]
+    Response: users = [ { "username": "username", "isOnline": "online/offline" }, ... ]
     """
     if 'username' not in session:
         return jsonify({'error': 'Please login first'}), 401
     
     result = server.get_user_list()
-    return jsonify(result)
 
-@app.route('/room-list', methods=['GET'])
+    for user in result:
+        if user['username'] in active_connections:
+            user['isOnline'] = 'online'
+        else:
+            user['isOnline'] = 'offline'
+
+    emit('user_list_response', {'status': 'success', 'users': result})
+
+@socketio.on('get_room_list')
 def room_list():
     """
     Get the list of chat rooms
@@ -78,9 +121,9 @@ def room_list():
         return jsonify({'error': 'Username is required'}), 400
 
     result = server.get_room_list(username)
-    return jsonify(result)
+    emit('room_list_response', {'status': 'success', 'rooms': result})
 
-@app.route('/send-message', methods=['POST'])
+@socketio.on('send_message')
 def send_message():
     """
     Send a message to a chat room
@@ -99,16 +142,17 @@ def send_message():
         return jsonify({'error': 'Invalid data'}), 400
 
     result = server.send_message(from_user, to_room_id, message)
-    if "message_sent" in result:
-        return jsonify({'status': "Message sent"}), 200
-    return jsonify({'status': "Failed to send message"}), 400
+    if result == "message_sent":
+        emit('message_response', {'status': 'Message sent'}, broadcast=True)
+    else:
+        emit('message_response', {'status': 'Failed to send message'})
 
-@app.route('/message-history', methods=['GET'])
+@socketio.on('get_message_history')
 def history():
     """
     Get the message history of a chat room
     Request: ?room_id=room_id&username=username
-    Response: messages = [ { "room_name": "room_name", "from_user": "username", "message": "message", "date": "date", "status": true/false }, ... ]
+    Response: result = [ { "room_name": "room_name", "from_user": "username", "message": "message", "date": "date", "status": true/false }, ... ]
     """
     if 'username' not in session:
         return jsonify({'error': 'Please login first'}), 401
@@ -119,9 +163,9 @@ def history():
         return jsonify({'error': 'Room ID and username is required'}), 400
 
     result = server.get_history(room_id, username)
-    return jsonify(result)
+    emit('message_history_response', {'status': 'success', 'history': result})
 
-@app.route('/unread-messages', methods=['GET'])
+@socketio.on('unread_messages')
 def unread_messages():
     """
     Get the unread messages of a user
@@ -138,7 +182,7 @@ def unread_messages():
     result = server.get_unread_messages(username)
     return jsonify(result)
 
-@app.route('/change-room-name', methods=['POST'])
+@socketio.on('change_room_name')
 def change_room_name():
     """
     Change the name of a chat room
@@ -156,18 +200,34 @@ def change_room_name():
         return jsonify({'error': 'Invalid data'}), 400
 
     result = server.change_room_name(room_id, room_name)
-    if "room_name_changed" in result:
-        return jsonify({'status': "Room name changed"}), 200
-    return jsonify({'status': "Failed to change room name"}), 400
+    if result == "room_name_changed":
+        emit('change_room_name_response', {'message': 'Room name changed'}, broadcast=True)
+    else:
+        emit('change_room_name_response', {'message': 'Failed to change room name'})
 
-# WebSocket events for real-time communication
-@socketio.on('connect')
-def handle_connect():
-    print('Web client connected')
+@socketio.on('create_room')
+def create_room():
+    """
+    Create a new chat room
+    Request body: { "room_name": "room_name", "userlisr": ["username1", "username2", ...] }
+    Response: { "status": "Room created" or "Failed to create room", "room_id": "room_id" }
+    """
 
-@socketio.on('disconnect')
-def handle_disconnect():
-    print('Web client disconnected')
+    if 'username' not in session:
+        return jsonify({'error': 'Please login first'}), 401
+
+    data = request.json
+    room_name = data.get('room_name')
+    userlist = data.get('userlist')
+
+    if not all([room_name, userlist]):
+        return jsonify({'error': 'Invalid data'}), 400
+    
+    result = server.create_room(room_name, userlist)
+    if "room_created" in result:
+        emit('create_room_response', {'message': 'Room created', 'room_id': result['room_id']}, broadcast=True)
+    else:
+        emit('create_room_response', {'message': 'Failed to create room'})
 
 # Run the Flask-SocketIO server
 if __name__ == '__main__':
