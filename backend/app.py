@@ -37,7 +37,6 @@ def handle_authentication(data):
     username = data.get('username')
     if username:
         if username in connected_users:
-            print(f"User {username} already authenticated")
             return  # 用戶已經驗證過
 
         # 將用戶名綁定到 socket.id

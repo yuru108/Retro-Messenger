@@ -75,7 +75,6 @@ const ChatRoom: React.FC<{ socket: typeof Socket | null }> = ({ socket }) => {
             socket.on('room_list_update', (roomData: any) => {
                 console.log("Received room update:", roomData);
                 
-                // TODO: 更新用戶列表
                 loadRooms();
             });
 
@@ -186,7 +185,6 @@ const ChatRoom: React.FC<{ socket: typeof Socket | null }> = ({ socket }) => {
             socket.on('history_update', (message: any) => {
                 console.log("Received message update: ", message);
                 
-                // TODO: 更新歷史訊息
                 loadMessageHistory(roomId, username);
             });
     

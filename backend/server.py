@@ -115,7 +115,7 @@ def register_user(username, password):
 
     for existing_username in existing_users:
         existing_username = existing_username[0]
-        room_name = f"{username} & {existing_username}"
+        room_name = "Default Room"
         
         cursor.execute("INSERT INTO Rooms (room_name) VALUES (?)", (room_name,))
         room_id = cursor.lastrowid
@@ -194,7 +194,7 @@ def get_room_list(username):
         cursor.execute("SELECT username FROM RoomMembers WHERE room_id = ?", (room_id,))
         members = cursor.fetchall()
 
-        if len(members) == 2:
+        if len(members) == 2 and room_name == "Default Room":
             members = [member[0] for member in members]
             members.remove(username)
             room_name = members[0]
