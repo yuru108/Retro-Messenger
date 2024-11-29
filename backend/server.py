@@ -43,6 +43,8 @@ CREATE TABLE IF NOT EXISTS Messages (
 """)
 conn.commit()
 
+connect_user = []
+
 class User:
     def __init__(self, username):
         self.username = username
@@ -143,7 +145,14 @@ def login_user(username, password):
         return "login_error"
 
     print(f"{username} 已登入")
+    connect_user.append(username)
     return username
+
+def logout_user(username):
+    """使用者登出"""
+    connect_user.remove(username)
+    print(f"{username} 已登出")
+    return "logout_success"
 
 def get_history(room_id, username):
     cursor.execute(
@@ -179,7 +188,7 @@ def get_user_list():
         username = username[0]
         response.append({
             "username": username,
-            "isOnline": None
+            "isOnline": "online" if username in connect_user else "offline"
         })
     
     return response
