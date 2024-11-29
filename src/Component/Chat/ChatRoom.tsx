@@ -3,6 +3,7 @@ import { UserContext } from '../../App'; // 引入全域的 UserContext
 import UserList from './UserList'; // 用戶列表元件
 import ChatArea from './ChatArea'; // 聊天區域元件
 import UserProfile from './UserProfile'; // 用戶頭像與登出元件
+import io from 'socket.io-client'; // 引入 socket.io-client
 
 type ChatRoomProps = {
     socket: WebSocket | null; // 接收 WebSocket 連線
@@ -23,8 +24,7 @@ type User = {
     roomId: string; // 房間 ID
 };
 
-// WebSocket 伺服器 URL
-const WS_URL = "ws://127.0.0.1:12345";
+const socket = io("http://localhost:12345");
 
 const ChatRoom: React.FC<{ socket: WebSocket | null }> = ({ socket }) => {
     const userContext = useContext(UserContext);
@@ -38,15 +38,13 @@ const ChatRoom: React.FC<{ socket: WebSocket | null }> = ({ socket }) => {
 
     const loadRooms = async () => {
         try {
-            const response = await fetch(`http://127.0.0.1:12345/room-list?username=${username}`, {
-                credentials: 'include', // 傳遞 Cookie
-            });
+            const response = await fetch(`http://127.0.0.1:12345/room-list?username=${username}`);
             if (response.ok) {
                 const rooms = await response.json();
                 setUsers(rooms.map((room: { room_id: string; room_name: string; isOnline: boolean }) => ({
                     username: room.room_name,
-                    isOnline: room.isOnline, // 根據後端邏輯調整在線狀態
-                    roomId: room.room_id, // 儲存對應的 roomId
+                    isOnline: room.isOnline,
+                    roomId: room.room_id,
                 })));
             } else {
                 console.error(`Failed to load rooms, status: ${response.status}`);
@@ -60,6 +58,15 @@ const ChatRoom: React.FC<{ socket: WebSocket | null }> = ({ socket }) => {
 
     useEffect(() => {
         loadRooms();
+
+        socket.on('room_list_update', (updatedRoomList) => {
+            console.log("Received updated room list:", updatedRoomList);
+            setUsers(updatedRoomList);
+        });
+
+        return () => {
+            socket.off('room_list_update');
+        };
     }, []);
 
     // 當選擇用戶時，設置對應的 roomId
@@ -163,6 +170,27 @@ const ChatRoom: React.FC<{ socket: WebSocket | null }> = ({ socket }) => {
         } else {
             console.warn("Missing room ID or username here.");
         }
+
+        socket.on('history_update', (message) => {
+            console.log("Received message:", message);
+            setMessages((prev) => {
+                const updatedMessages = {
+                    ...prev,
+                    [message.room_id]: [...(prev[message.room_id] || []), {
+                        from: message.from_user,
+                        content: message.message,
+                        time: new Date(message.date).toLocaleString(),
+                        read: message.status
+                    }]
+                };
+                console.log("Updated messages:", updatedMessages);
+                return updatedMessages;
+            });
+        });
+
+        return () => {
+            socket.off('history_update');
+        };
     }, [roomId, username]);
 
     const loadUnreadMessages = async () => {

@@ -1,6 +1,6 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-from flask_socketio import SocketIO
+from flask_socketio import SocketIO, emit
 import server
 
 app = Flask(__name__)
@@ -73,7 +73,7 @@ def logout():
 def user_list():
     """
     Get the list of registered users
-    Response: users = [ { "username": "username", "isOnline": "online/offline" }, ... ]
+    Response: users = [ { "username": "username" }, ... ]
     """    
     result = server.get_user_list()
     return jsonify(result), 200
@@ -83,7 +83,7 @@ def room_list():
     """
     Get the list of chat rooms
     Request: ?username=username
-    Response: rooms = [ {"room_id": "room_id", "room_name": "room_name" }, ... ]
+    Response: rooms = [ {"room_id": "room_id", "room_name": "room_name", "isOnline": True/False }, ... ]
     """
     username = request.args.get('username')
     if not username:
@@ -109,6 +109,7 @@ def send_message():
 
     result = server.send_message(from_user, to_room_id, message)
     if result == "message_sent":
+        history_update(to_room_id, from_user)
         return jsonify({'status': 'Message sent'}), 200
     else:
         return jsonify({'status': 'Failed to send message'}), 500
@@ -178,6 +179,30 @@ def create_room():
     
     result = server.create_room(room_name, userlist)
     return jsonify(result), 200
+
+def room_list_update(username):
+    """
+    Push the updated room list to a specific user
+    """
+    print("Updating room list for", username)
+
+    if username:
+        room_list = server.get_room_list(username)
+        socketio.emit('room_list_update', room_list, to=username)
+    else:
+        print("No username provided for room list update")
+
+def history_update(room_id, username):
+    """
+    Push the updated message history to a specific user
+    """
+    print("Updating history for", room_id, "for", username)
+
+    if room_id and username:
+        message = server.get_history(room_id, username)
+        socketio.emit('history_update', message, to=username)
+    else:
+        print("No room ID or username provided for history update")
 
 # Run the Flask-SocketIO server
 if __name__ == '__main__':

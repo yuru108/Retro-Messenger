@@ -77,7 +77,7 @@ class Message:
 def mark_messages_as_read(room_id, username):
     cursor.execute(
         "UPDATE Messages SET read = 1 WHERE to_room_id = ? AND from_user != ? AND read = 0",
-        (username, room_id,)
+        (room_id, username,)
     )
     conn.commit()
 
@@ -184,24 +184,29 @@ def get_user_list():
     users = cursor.fetchall()
     response = []
 
-    for username in users:
-        username = username[0]
-        response.append({
-            "username": username,
-            "isOnline": "online" if username in connect_user else "offline"
-        })
+    response = [{"username": user[0]} for user in users]
     
     return response
 
 def get_room_list(username):
     cursor.execute("SELECT * FROM Rooms WHERE room_id IN (SELECT room_id FROM RoomMembers WHERE username = ?)", (username,))
     rooms = cursor.fetchall()
-    response = []
 
+    response = []
     for room_id, room_name in rooms:
+
+        cursor.execute("SELECT username FROM RoomMembers WHERE room_id = ?", (room_id,))
+        members = cursor.fetchall()
+
+        if len(members) == 2:
+            members = [member[0] for member in members]
+            members.remove(username)
+            room_name = members[0]
+
         response.append({
             "room_id": room_id,
-            "room_name": room_name
+            "room_name": room_name,
+            "isOnline": True if all(member[0] in connect_user for member in members) else False
         })
 
     return response
