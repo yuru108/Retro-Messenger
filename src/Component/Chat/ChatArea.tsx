@@ -55,63 +55,68 @@ const ChatArea: React.FC<ChatAreaProps> = ({ selectedUser, username, messages, o
     };
 
     return (
-        <div className="flex-1 flex flex-col p-4">
-            {/* 聊天訊息區 */}
-            <div className="flex-1 overflow-y-auto mb-4">
-                <h2 className="text-lg font-semibold">
-                    {selectedUser ? `Chat with ${selectedUser}` : 'Select a user to chat'}
-                </h2>
-                <ul>
-                    {messages.map((msg, idx) => (
-                        <li key={idx} className={`mb-4 flex flex-col ${msg.from === username ? 'items-end' : 'items-start'}`}>
-                            {/* 訊息氣泡 */}
-                            <div
-                                className={`p-3 rounded-md ${msg.from === username ? 'bg-blue-100' : 'bg-gray-100'}`}
-                                style={{ maxWidth: '66%', wordBreak: 'break-word' }}
-                            >
-                                {/* 如果是自己傳送的訊息，只顯示內容；否則顯示發送者 username */}
-                                {msg.from === username ? msg.content : `${msg.from}: ${msg.content}`}
-                            </div>
+        <div className="flex h-screen">
 
-                            {/* 顯示訊息時間與是否已讀 */}
-                            <span
-                                className="text-gray-400 text-xs mt-1"
-                                style={{
-                                    maxWidth: '50%', // 限制寬度
-                                    whiteSpace: 'normal', // 自動換行
-                                    wordBreak: 'break-word', // 強制換行
-                                }}
-                            >
-                                {msg.time}{' '}
-                                {msg.read ? (
-                                    msg.from === username ? (
-                                        // 顯示自定義已讀字樣或預設字樣
-                                        readReceipt
-                                    ) : '已讀'
-                                ) : '未讀'}
-                            </span>
-                        </li>
-                    ))}
-                </ul>
-            </div>
-
-            {/* 訊息輸入區域 */}
-            <div className="flex">
-                <input
-                    className="flex-1 border p-2 rounded-l-md"
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)} // 更新輸入框內容
-                    placeholder="Type a message"
-                />
-                <button
-                    onClick={sendMessage} // 點擊按鈕時傳送訊息
-                    className="bg-cyan-500 text-white px-4 py-2 rounded-r-md"
-                >
-                    Send
-                </button>
+    
+            {/* 聊天區域 */}
+            <div className="flex-grow flex flex-col p-4">
+                {/* 聊天訊息區 */}
+                <div className="flex-1 overflow-y-auto mb-4">
+                    <h2 className="text-lg font-semibold">
+                        {selectedUser ? `Chat with ${selectedUser}` : 'Select a user to chat'}
+                    </h2>
+                    <ul>
+                        {messages.map((msg, idx) => (
+                            <li key={idx} className={`mb-4 flex flex-col ${msg.from === username ? 'items-end' : 'items-start'}`}>
+                                {/* 訊息氣泡 */}
+                                <div
+                                    className={`p-3 rounded-md ${msg.from === username ? 'bg-blue-100' : 'bg-gray-100'}`}
+                                    style={{ maxWidth: '66%', wordBreak: 'break-word' }}
+                                >
+                                    {/* 如果是自己傳送的訊息，只顯示內容；否則顯示發送者 username */}
+                                    {msg.from === username ? msg.content : `${msg.from}: ${msg.content}`}
+                                </div>
+    
+                                {/* 顯示訊息時間與是否已讀 */}
+                                <span
+                                    className="text-gray-400 text-xs mt-1"
+                                    style={{
+                                        whiteSpace: 'normal', // 自動換行
+                                        wordBreak: 'break-word', // 強制換行
+                                    }}
+                                >
+                                    {msg.time}{' '}
+                                    {msg.read ? (
+                                        msg.from === username ? (
+                                            // 顯示自定義已讀字樣或預設字樣
+                                            readReceipt
+                                        ) : '已讀'
+                                    ) : '未讀'}
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+    
+                {/* 訊息輸入區域，使用 mt-auto 確保其固定在底部 */}
+                <div className="flex mt-auto">
+                    <input
+                        className="flex-1 border p-2 rounded-l-md"
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)} // 更新輸入框內容
+                        placeholder="Type a message"
+                    />
+                    <button
+                        onClick={sendMessage} // 點擊按鈕時傳送訊息
+                        className="bg-cyan-500 text-white px-4 py-2 rounded-r-md"
+                    >
+                        Send
+                    </button>
+                </div>
             </div>
         </div>
     );
+    
 };
 
 export default ChatArea;

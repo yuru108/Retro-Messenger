@@ -43,9 +43,9 @@ const ChatRoom: React.FC<{ socket: WebSocket | null }> = ({ socket }) => {
             });
             if (response.ok) {
                 const rooms = await response.json();
-                setUsers(rooms.map((room: { room_id: string; room_name: string }) => ({
+                setUsers(rooms.map((room: { room_id: string; room_name: string; isOnline: boolean }) => ({
                     username: room.room_name,
-                    isOnline: true, // 根據後端邏輯調整在線狀態
+                    isOnline: room.isOnline, // 根據後端邏輯調整在線狀態
                     roomId: room.room_id, // 儲存對應的 roomId
                 })));
             } else {
@@ -82,7 +82,7 @@ const ChatRoom: React.FC<{ socket: WebSocket | null }> = ({ socket }) => {
                 from: username,
                 content: message.content,
                 time: new Date().toLocaleString(),
-                read: true,
+                read: false,
             };
             
             // 更新訊息狀態，顯示發送的訊息
