@@ -131,7 +131,6 @@ const UserProfile: React.FC<UserProfileProps> = ({ username, onLogout, users }) 
                 <GroupCreationModal
                     onClose={() => setIsGroupModalOpen(false)} // 關閉群組創建模態框
                     onCreate={handleCreateGroupCallback} // 創建群組回調
-                    users={users.map(user => user.username)} // 傳遞用戶名稱列表
                 />
             )}
         </div>
