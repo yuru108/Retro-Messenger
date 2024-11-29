@@ -41,7 +41,6 @@ const ChatRoom: React.FC <{ socket: WebSocket | null }> = ({ socket }) => {
 
     const [roomId, setRoomId] = useState<string>('');
 
-    const ws = useRef<WebSocket | null>(null); // 使用 `useRef` 儲存 WebSocket 連接
 
     const loadRooms = async () => {
         try {
@@ -68,7 +67,7 @@ const ChatRoom: React.FC <{ socket: WebSocket | null }> = ({ socket }) => {
     useEffect(() => {
         loadRooms();
     }, []);
-    
+
 
     // 登出處理函數（尚未實作）
     const handleLogout = () => {
@@ -80,31 +79,44 @@ const ChatRoom: React.FC <{ socket: WebSocket | null }> = ({ socket }) => {
             const newMessage = {
                 from: username,
                 content: message.content,
-                time: new Date().toLocaleString(), // 本地時間格式化
+                time: new Date().toLocaleString(),
                 read: true,
             };
             setMessages((prev) => ({
                 ...prev,
                 [selectedUser]: [...(prev[selectedUser] || []), newMessage],
             }));
-            
+    
             try {
-                await fetch("http://127.0.0.1:12345/send-message", {
+                const response = await fetch("http://127.0.0.1:12345/send-message", {
                     method: "POST",
                     headers: {
-                        "Content-Type": "application/json"
+                        "Content-Type": "application/json",
                     },
                     body: JSON.stringify({
                         username,
                         to_room_id: selectedUser,
-                        message: message.content
-                    })
+                        message: message.content,
+                    }),
                 });
+
+                console.log({
+                    username,
+                    to_room_id: selectedUser,
+                    message: message.content
+                });
+    
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to send message');
+                }
             } catch (error) {
                 console.error("Error sending message:", error);
+                // alert(`Error: ${error.message}`); // 顯示錯誤訊息給使用者
             }
         }
     }, [selectedUser, username]);
+    
     
     const loadMessageHistory = async (roomId: string, username: string) => {
         try {
@@ -112,14 +124,20 @@ const ChatRoom: React.FC <{ socket: WebSocket | null }> = ({ socket }) => {
             if (response.ok) {
                 const data = await response.json();
     
-                // 確保 data 是陣列
-                if (Array.isArray(data)) {
+                if (data.message === "no_messages") {
+                    console.log("No messages found for this room.");
+                    setMessages((prev) => ({
+                        ...prev,
+                        [roomId]: [] // 設置為空陣列表示沒有訊息
+                    }));
+                } else if (Array.isArray(data)) {
+                    // 如果資料是陣列格式，更新訊息
                     setMessages((prev) => ({
                         ...prev,
                         [roomId]: data.map((msg: any) => ({
                             from: msg.from_user,
                             content: msg.message,
-                            time: new Date(msg.date).toLocaleString(), // 格式化為本地時間
+                            time: new Date(msg.date).toLocaleString(),
                             read: msg.status
                         }))
                     }));
@@ -132,14 +150,26 @@ const ChatRoom: React.FC <{ socket: WebSocket | null }> = ({ socket }) => {
         } catch (error) {
             console.error("Error fetching message history:", error);
         }
-    }
-    
-    
+    };    
+
     useEffect(() => {
         if (selectedUser) {
-            loadMessageHistory(roomId, username);
+            setRoomId(selectedUser); // 更新 roomId
         }
     }, [selectedUser]);
+    
+    useEffect(() => {
+        console.log("selectedUser:", selectedUser);
+        console.log("roomId:", roomId);
+        console.log("username:", username);
+    
+        if (roomId && username) {
+            loadMessageHistory(roomId, username);
+        } else {
+            console.warn("Missing room ID or username here.");
+        }
+    }, [roomId, username]);
+    
 
     const loadUnreadMessages = async () => {
         try {

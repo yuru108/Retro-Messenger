@@ -31,10 +31,12 @@ const GroupCreationModal: React.FC<GroupCreationModalProps> = ({ onClose, onCrea
         if (groupName && selectedMembers.length > 0) {
             try {
                 // 創建群組，發送 POST 請求到後端 Flask API
-                const response = await axios.post('http://localhost:12345/create-group', {
+                console.log('Sending group creation request...');
+                const response = await axios.post('http://127.0.0.1:12345/create-room', {
                     room_name: groupName,
                     userlist: selectedMembers,
                 });
+    
                 console.log('Group created:', response.data);
                 // 在這裡處理後端的回應，例如可以使用返回的 room_id
                 if (response.status === 200) {
@@ -52,6 +54,7 @@ const GroupCreationModal: React.FC<GroupCreationModalProps> = ({ onClose, onCrea
             }
         }
     };
+    
 
     return (
         <div className="absolute left-0 bottom-20  bg-white p-4 shadow-lg rounded-lg max-w-md mx-auto z-50">
