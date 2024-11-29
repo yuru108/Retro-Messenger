@@ -54,7 +54,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ selectedUser, username, messages, o
     // 傳送訊息
     const sendMessage = () => {
         if (selectedUser && input.trim() !== '' && socket) {
-            const time = new Date().toLocaleTimeString(); // 獲取傳送時間
+            const time = new Date().toLocaleString(); // 使用本地時間
             const messageData: ChatMessage = {
                 from: username, // 發送者是當前使用者
                 content: input, // 傳送的訊息內容

@@ -6,11 +6,12 @@ import websockets
 
 app = Flask(__name__)
 app.secret_key = "SecretKey"
-CORS(app)
+CORS(app, supports_credentials=True)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 # WebSocket URI
 WS_SERVER_URI = "ws://127.0.0.1:8000"
+
 
 # Helper to send data to the WebSocket server
 async def send_to_server(event, *args):
