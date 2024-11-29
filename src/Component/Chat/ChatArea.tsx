@@ -160,8 +160,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({ selectedUser, username, messages, o
                                 <span
                                     className="text-gray-400 text-xs mt-1"
                                     style={{
-                                        whiteSpace: 'normal', // 自動換行
-                                        wordBreak: 'break-word', // 強制換行
+                                        maxWidth: '250px', // 設定最大寬度
+                                        whiteSpace: 'normal', // 允許換行
                                     }}
                                 >
                                     {msg.time}{' '}
