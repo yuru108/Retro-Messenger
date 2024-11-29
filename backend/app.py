@@ -50,9 +50,6 @@ def login():
     if "login_error" in result:
         return jsonify({'error': "Invalid username or password"}), 401
     
-    session['username'] = username
-    session.permanent = True
-    print(f"User {username} logged in. Session: {session}")  # 確認登錄後的 session
     return jsonify({'message': "Login successful", 'username': username}), 200
 
 @app.route('/logout', methods=['POST'])
@@ -169,7 +166,7 @@ def change_room_name():
 def create_room():
     """
     Create a new chat room
-    Request body: { "room_name": "room_name", "userlisr": ["username1", "username2", ...] }
+    Request body: { "room_name": "room_name", "userlist": ["username1", "username2", ...] }
     Response: { "room_id": "room_id" }
     """
     data = request.json

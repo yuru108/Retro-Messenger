@@ -1,5 +1,7 @@
 
 import React, { useState } from 'react';
+import axios from 'axios';
+
 
 // 定義 Props 的類型
 interface GroupCreationModalProps {
@@ -25,14 +27,34 @@ const GroupCreationModal: React.FC<GroupCreationModalProps> = ({ onClose, onCrea
     };
 
     // 處理創建群組的邏輯
-    const handleCreateGroup = () => {
+    const handleCreateGroup = async () => {
         if (groupName && selectedMembers.length > 0) {
-            // 調用 `onCreate` 回調函數，將群組名稱和成員傳遞給父元件
-            onCreate({ groupName, members: selectedMembers });
-            // 關閉模態視窗
-            onClose();
+            try {
+                // 創建群組，發送 POST 請求到後端 Flask API
+                console.log('Sending group creation request...');
+                const response = await axios.post('http://127.0.0.1:12345/create-room', {
+                    room_name: groupName,
+                    userlist: selectedMembers,
+                });
+    
+                console.log('Group created:', response.data);
+                // 在這裡處理後端的回應，例如可以使用返回的 room_id
+                if (response.status === 200) {
+                    // 成功創建群組
+                    onCreate({ groupName, members: selectedMembers });
+                    // 關閉模態視窗
+                    onClose();
+                } else {
+                    // 處理失敗的情況
+                    alert('創建群組失敗');
+                }
+            } catch (error) {
+                console.error('創建群組時發生錯誤:', error);
+                alert('發生錯誤，請稍後再試');
+            }
         }
     };
+    
 
     return (
         <div className="absolute left-0 bottom-20  bg-white p-4 shadow-lg rounded-lg max-w-md mx-auto z-50">
