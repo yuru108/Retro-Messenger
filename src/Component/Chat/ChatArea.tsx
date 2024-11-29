@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Socket } from 'socket.io-client';
 
 // 定義單條訊息的資料結構
 type ChatMessage = {
@@ -14,7 +15,7 @@ type ChatAreaProps = {
     username: string; // 當前使用者的 username
     messages: ChatMessage[]; // 傳入的訊息陣列
     onSendMessage: (message: ChatMessage) => void; // 傳送訊息的回呼函數
-    socket: WebSocket | null; // WebSocket 連接
+    socket: typeof Socket | null; // WebSocket 連接
 };
 
 
@@ -31,7 +32,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({ selectedUser, username, messages, o
     const sendMessage = () => {
         console.log("selectedUser:", selectedUser);
         console.log("input:", input);
-        console.log("socket:", socket);
         if (selectedUser && input.trim() !== '' && socket) {
             const time = new Date().toLocaleString(); // 使用本地時間
             const messageData: ChatMessage = {

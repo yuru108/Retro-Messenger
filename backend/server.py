@@ -43,8 +43,6 @@ CREATE TABLE IF NOT EXISTS Messages (
 """)
 conn.commit()
 
-connect_user = []
-
 class User:
     def __init__(self, username):
         self.username = username
@@ -145,12 +143,10 @@ def login_user(username, password):
         return "login_error"
 
     print(f"{username} 已登入")
-    connect_user.append(username)
     return username
 
 def logout_user(username):
     """使用者登出"""
-    connect_user.remove(username)
     print(f"{username} 已登出")
     return "logout_success"
 
@@ -206,7 +202,7 @@ def get_room_list(username):
         response.append({
             "room_id": room_id,
             "room_name": room_name,
-            "isOnline": True if all(member[0] in connect_user for member in members) else False
+            "isOnline": False
         })
 
     return response
@@ -242,6 +238,11 @@ def send_message(from_user, to_room_id, message):
         return "message_sent"
     else:
         return "message_failed"
+    
+def get_room_members(room_id, username):
+    cursor.execute("SELECT username FROM RoomMembers WHERE room_id = ? AND username != ?", (room_id, username))
+    members = cursor.fetchall()
+    return [member[0] for member in members]
 
 def create_room(room_name, *users):
     cursor.execute("INSERT INTO Rooms (room_name) VALUES (?)", (room_name,))

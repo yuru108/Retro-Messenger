@@ -16,7 +16,11 @@ const App = () => {
 
     // 建立 Socket.IO 連接
     useEffect(() => {
-        const socketInstance = io('http://localhost:12345'); // 使用 io() 建立連接
+        const socketInstance = io('http://127.0.0.1:12345', {
+            query: { username: username },
+            transports: ['websocket', 'polling'],
+        });
+        
         setSocket(socketInstance);
 
         // 當接收到訊息時
