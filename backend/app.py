@@ -73,7 +73,7 @@ def logout():
 def user_list():
     """
     Get the list of registered users
-    Response: users = [ { "username": "username", "isOnline": "online/offline" }, ... ]
+    Response: users = [ { "username": "username" }, ... ]
     """    
     result = server.get_user_list()
     return jsonify(result), 200
@@ -83,7 +83,7 @@ def room_list():
     """
     Get the list of chat rooms
     Request: ?username=username
-    Response: rooms = [ {"room_id": "room_id", "room_name": "room_name" }, ... ]
+    Response: rooms = [ {"room_id": "room_id", "room_name": "room_name", "isOnline": True/False }, ... ]
     """
     username = request.args.get('username')
     if not username:
