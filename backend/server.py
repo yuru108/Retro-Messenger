@@ -134,15 +134,14 @@ async def register_user(websocket):
     for existing_username in existing_users:
         existing_username = existing_username[0]
         room_name = f"{username} & {existing_username}"
+        
         cursor.execute("INSERT INTO Rooms (room_name) VALUES (?)", (room_name,))
         room_id = cursor.lastrowid
         conn.commit()
 
-        # 將新使用者與現有使用者加入房間
         cursor.execute("INSERT INTO RoomMembers (room_id, username) VALUES (?, ?)", (room_id, username))
         cursor.execute("INSERT INTO RoomMembers (room_id, username) VALUES (?, ?)", (room_id, existing_username))
         conn.commit()
-        print(f"建立個人聊天室：{room_name} (房間 ID: {room_id})")
 
     return User(username, websocket)
 
@@ -229,6 +228,30 @@ async def get_unread_messages(user, username):
 
     await user.websocket.send(response)
 
+async def create_room(user, room_name, *users):
+    cursor.execute("INSERT INTO Rooms (room_name) VALUES (?)", (room_name,))
+    room_id = cursor.lastrowid
+    conn.commit()
+
+    for username in users:
+        cursor.execute("INSERT INTO RoomMembers (room_id, username) VALUES (?, ?)", (room_id, username))
+        conn.commit()
+
+    await user.websocket.send("room_created")
+    
+
+async def change_room_name(user, room_id, new_name):
+    cursor.execute("SELECT * FROM Rooms WHERE room_id = ?", (room_id,))
+    room = cursor.fetchone()
+    if not room:
+        await user.websocket.send("room_not_found")
+
+    cursor.execute("UPDATE Rooms SET room_name = ? WHERE room_id = ?", (new_name, room_id))
+    conn.commit()
+
+    await user.websocket.send("room_name_changed")
+
+
 async def main(websocket):
     user = User(None, websocket)
     try:
@@ -269,6 +292,10 @@ async def main(websocket):
         elif operation.startswith("get_room_list"):
             username = await websocket.recv()
             await get_room_list(user, username)
+        elif operation.startswith("change_room_name"):
+            room_id = await websocket.recv()
+            new_name = await websocket.recv()
+            await change_room_name(user, room_id, new_name)
         else:
             print("Unknown operation")
             return
