@@ -32,7 +32,7 @@ const ChatRoom: React.FC<{ socket: typeof Socket | null }> = ({ socket }) => {
 
     useEffect(() => {
         if (socket) {
-            socket.emit('authenticate', { username: 'user1' });
+            socket.emit('authenticate', { username: username });
 
             socket.on('authenticated', (response: any) => {
                 if (response.status === 'success') {
@@ -76,6 +76,7 @@ const ChatRoom: React.FC<{ socket: typeof Socket | null }> = ({ socket }) => {
                 console.log("Received room update:", roomData);
                 
                 // TODO: 更新用戶列表
+                loadRooms();
             });
 
             return () => {
@@ -181,10 +182,12 @@ const ChatRoom: React.FC<{ socket: typeof Socket | null }> = ({ socket }) => {
     useEffect(() => {
         if (socket&&roomId && username) {
             loadMessageHistory(roomId, username);
+
             socket.on('history_update', (message: any) => {
                 console.log("Received message update: ", message);
                 
                 // TODO: 更新歷史訊息
+                loadMessageHistory(roomId, username);
             });
     
             return () => {

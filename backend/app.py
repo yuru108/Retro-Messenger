@@ -37,6 +37,7 @@ def handle_authentication(data):
     username = data.get('username')
     if username:
         if username in connected_users:
+            print(f"User {username} already authenticated")
             return  # 用戶已經驗證過
 
         # 將用戶名綁定到 socket.id
@@ -89,7 +90,7 @@ def login():
         return jsonify({'error': "Invalid username or password"}), 401
     
     # 更新用戶的聊天室列表
-    room_list_update(username)
+    room_list_update()
     return jsonify({'message': "Login successful", 'username': username}), 200
 
 @app.route('/logout', methods=['POST'])
@@ -107,8 +108,13 @@ def logout():
     result = server.logout_user(username)
     
     if "logout_success" in result:
+        # 從已驗證用戶中移除
+        if username in connected_users:
+            del connected_users[username]
+            print(f"User {username} logged out")
+        
         # 更新用戶的聊天室列表
-        room_list_update(username)
+        room_list_update()
 
         return jsonify({'message': "Logout successful"}), 200
 
@@ -209,6 +215,7 @@ def change_room_name():
 
     result = server.change_room_name(room_id, room_name)
     if result == "room_name_changed":
+        room_list_update()
         return jsonify({'status': 'Room name changed'}), 200
     else:
         return jsonify({'status': 'Failed to change room name'}), 500
@@ -227,20 +234,18 @@ def create_room():
     if not all([room_name, userlist]):
         return jsonify({'error': 'Invalid data'}), 400
     
-    result = server.create_room(room_name, userlist)
+    result = server.create_room(room_name, *userlist)
+    room_list_update()
     return jsonify(result), 200
 
-def room_list_update(username):
+def room_list_update():
     """
     Push the updated room list to a specific user
     """
-    if username:
-        for user in connected_users:
-            room_list = server.get_room_list(user)
-            socketio.emit('room_list_update', room_list, to=connected_users[user])
-            print(f"Room list updated for {user}")
-    else:
-        print("No username provided for room list update")
+    for user in connected_users:
+        room_list = server.get_room_list(user)
+        socketio.emit('room_list_update', room_list, to=connected_users[user])
+        print(f"Room list updated for {user}")
 
 def history_update(room_id, username):
     """
