@@ -39,6 +39,8 @@ const ChatRoom: React.FC <{ socket: WebSocket | null }> = ({ socket }) => {
         { username: "Bob", isOnline: false },
     ]); // 預設用戶清單
 
+    const [roomId, setRoomId] = useState<string>('');
+
     const ws = useRef<WebSocket | null>(null); // 使用 `useRef` 儲存 WebSocket 連接
 
     const loadRooms = async () => {
@@ -104,31 +106,38 @@ const ChatRoom: React.FC <{ socket: WebSocket | null }> = ({ socket }) => {
         }
     }, [selectedUser, username]);
     
-    const loadMessageHistory = async (roomId: string) => {
+    const loadMessageHistory = async (roomId: string, username: string) => {
         try {
             const response = await fetch(`http://127.0.0.1:12345/message-history?room_id=${roomId}&username=${username}`);
             if (response.ok) {
                 const data = await response.json();
-                setMessages((prev) => ({
-                    ...prev,
-                    [roomId]: data.map((msg: any) => ({
-                        from: msg.from_user,
-                        content: msg.message,
-                        time: new Date(msg.date).toLocaleString(), // 格式化為本地時間
-                        read: msg.status
-                    }))
-                }));
+    
+                // 確保 data 是陣列
+                if (Array.isArray(data)) {
+                    setMessages((prev) => ({
+                        ...prev,
+                        [roomId]: data.map((msg: any) => ({
+                            from: msg.from_user,
+                            content: msg.message,
+                            time: new Date(msg.date).toLocaleString(), // 格式化為本地時間
+                            read: msg.status
+                        }))
+                    }));
+                } else {
+                    console.error("Unexpected data format:", data);
+                }
             } else {
                 console.error("Failed to load message history");
             }
         } catch (error) {
             console.error("Error fetching message history:", error);
         }
-    };
+    }
+    
     
     useEffect(() => {
         if (selectedUser) {
-            loadMessageHistory(selectedUser);
+            loadMessageHistory(roomId, username);
         }
     }, [selectedUser]);
 

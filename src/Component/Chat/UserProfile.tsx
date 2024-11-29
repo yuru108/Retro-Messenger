@@ -95,7 +95,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ username, onLogout, users }) 
             {isDropdownOpen && (
                 <div
                     ref={dropdownRef}
-                    className="absolute left-0 bottom-20 w-30 bg-white shadow-md rounded-md border z-20"
+                    className="absolute left-0 bottom-12 w-30 bg-white shadow-md rounded-md border z-20"
                 >
                     <button
                         className="w-full text-left py-2 px-4 text-gray-700 hover:bg-gray-100"

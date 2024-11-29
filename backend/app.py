@@ -50,9 +50,6 @@ def login():
     if "login_error" in result:
         return jsonify({'error': "Invalid username or password"}), 401
     
-    session['username'] = username
-    session.permanent = True
-    print(f"User {username} logged in. Session: {session}")  # 確認登錄後的 session
     return jsonify({'message': "Login successful", 'username': username}), 200
 
 @app.route('/logout', methods=['POST'])
