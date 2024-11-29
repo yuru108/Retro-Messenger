@@ -2,7 +2,6 @@ import React from 'react';
 
 // 定義用戶型別
 type User = {
-    uid: string;        // 使用者的唯一 ID
     username: string;   // 使用者名稱
     isOnline: boolean;  // 是否在線
 };
@@ -10,8 +9,8 @@ type User = {
 // 定義元件的屬性型別
 type UserListProps = {
     users: User[];                      // 用戶列表
-    onSelectUser: (user: string) => void; // 用戶點擊時的回調函數，返回選中的 UID
-    selectedUser: string | null;        // 當前選中的用戶 UID
+    onSelectUser: (user: string) => void; // 用戶點擊時的回調函數，返回選中的用戶名稱
+    selectedUser: string | null;        // 當前選中的用戶名稱
     className?: string;                 // 可選的外部樣式類名，用於自訂樣式
 };
 
@@ -22,11 +21,11 @@ const UserList: React.FC<UserListProps> = ({ users, onSelectUser, selectedUser }
             {users.length > 0 ? (
                 users.map((user) => (
                     <div
-                        key={user.uid} // 唯一的鍵值
+                        key={user.username} // 使用 username 作為唯一的鍵值
                         className={`p-2 cursor-pointer rounded-md shadow-sm 
-                            ${user.uid === selectedUser ? 'bg-white' : 'bg-slate-50'} 
+                            ${user.username === selectedUser ? 'bg-white' : 'bg-slate-50'} 
                             ${user.isOnline ? 'border-l-4 border-green-400' : 'border-l-4 border-red-400'}`}
-                        onClick={() => onSelectUser(user.uid)} // 點擊時執行回調
+                        onClick={() => onSelectUser(user.username)} // 點擊時執行回調
                     >
                         {/* 用戶資訊區塊 */}
                         <div className="flex justify-between items-center">
