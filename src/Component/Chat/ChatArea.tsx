@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Socket } from 'socket.io-client';
 
 // 定義單條訊息的資料結構
 type ChatMessage = {
@@ -20,7 +21,7 @@ type ChatAreaProps = {
     username: string;
     messages: ChatMessage[];
     onSendMessage: (message: ChatMessage) => void;
-    socket: WebSocket | null;
+    socket: typeof Socket | null; // WebSocket 連接
     setUserList: React.Dispatch<React.SetStateAction<User[]>>; // 使用 setUsers 並更新類型
     userList: User[];
     roomId: string; // 新增 roomId
@@ -41,7 +42,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({ selectedUser, username, messages, o
     const sendMessage = () => {
         console.log("selectedUser:", selectedUser);
         console.log("input:", input);
-        console.log("socket:", socket);
         if (selectedUser && input.trim() !== '' && socket) {
             const time = new Date().toLocaleString(); // 使用本地時間
             const messageData: ChatMessage = {

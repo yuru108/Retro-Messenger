@@ -4,12 +4,50 @@ from flask_socketio import SocketIO, emit
 import server
 
 app = Flask(__name__)
-
 app.secret_key = "secret_key"
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 CORS(app, supports_credentials=True, resources={r"/*": {"origins": "*"}})
 
-socketio = SocketIO(app, cors_allowed_origins="*")
+connected_users = {}  # 已驗證用戶：{username: socket.id}
+pending_connections = {}  # 暫時存儲尚未驗證的連線：{socket.id: True}
+
+@socketio.on('connect')
+def handle_connect():
+    pending_connections[request.sid] = True
+    print(f"Socket {request.sid} connected, waiting for authentication.")
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    sid_to_remove = request.sid
+    # 從已驗證用戶中移除
+    for username, sid in list(connected_users.items()):
+        if sid == sid_to_remove:
+            del connected_users[username]
+            print(f"User {username} disconnected")
+            break
+
+    # 從待驗證連線中移除
+    if sid_to_remove in pending_connections:
+        del pending_connections[sid_to_remove]
+        print(f"Socket {sid_to_remove} disconnected (not authenticated)")
+
+@socketio.on('authenticate')
+def handle_authentication(data):
+    username = data.get('username')
+    if username:
+        if username in connected_users:
+            return  # 用戶已經驗證過
+
+        # 將用戶名綁定到 socket.id
+        connected_users[username] = request.sid
+        if request.sid in pending_connections:
+            del pending_connections[request.sid]
+        print(f"User {username} authenticated with Socket ID {request.sid}")
+        socketio.emit('authenticated', {'status': 'success'}, to=request.sid)
+    else:
+        print(f"Authentication failed for socket {request.sid}")
+        socketio.emit('authenticated', {'status': 'failed'}, to=request.sid)
 
 # API routes
 @app.route('/register', methods=['POST'])
@@ -90,6 +128,13 @@ def room_list():
         return jsonify({'error': 'Username is required'}), 400
 
     result = server.get_room_list(username)
+
+    for room in result:
+        room_id = room.get('room_id')
+        members = server.get_room_members(room_id, username)
+        online_members = [member for member in members if member in connected_users]
+        room['isOnline'] = True if online_members else False
+
     return jsonify(result), 200
 
 @app.route('/send-message', methods=['POST'])
@@ -188,7 +233,7 @@ def room_list_update(username):
 
     if username:
         room_list = server.get_room_list(username)
-        socketio.emit('room_list_update', room_list, to=username)
+        socketio.emit('room_list_update', room_list, to=connected_users[member])
     else:
         print("No username provided for room list update")
 
@@ -196,11 +241,12 @@ def history_update(room_id, username):
     """
     Push the updated message history to a specific user
     """
-    print("Updating history for", room_id, "for", username)
-
     if room_id and username:
         message = server.get_history(room_id, username)
-        socketio.emit('history_update', message, to=username)
+        member_list = server.get_room_members(room_id, username)
+        for member in member_list:
+            if member in connected_users:
+                socketio.emit('history_update', message, to=connected_users[member])
     else:
         print("No room ID or username provided for history update")
 

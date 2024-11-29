@@ -3,7 +3,7 @@ import { UserContext } from '../../App'; // 引入全域的 UserContext
 import UserList from './UserList'; // 用戶列表元件
 import ChatArea from './ChatArea'; // 聊天區域元件
 import UserProfile from './UserProfile'; // 用戶頭像與登出元件
-import io from 'socket.io-client'; // 引入 socket.io-client
+import { Socket } from 'socket.io-client';
 
 type ChatRoomProps = {
     socket: WebSocket | null; // 接收 WebSocket 連線
@@ -24,9 +24,7 @@ type User = {
     roomId: string; // 房間 ID
 };
 
-const socket = io("http://localhost:12345");
-
-const ChatRoom: React.FC<{ socket: WebSocket | null }> = ({ socket }) => {
+const ChatRoom: React.FC<{ socket: typeof Socket | null }> = ({ socket }) => {    
     const userContext = useContext(UserContext);
     const username = String(userContext?.username) || "testUser123"; // 如果 Context 為空，使用測試用戶
     
@@ -35,7 +33,25 @@ const ChatRoom: React.FC<{ socket: WebSocket | null }> = ({ socket }) => {
     const [messages, setMessages] = useState<{ [key: string]: ChatMessage[] }>({}); // 所有聊天訊息的集合
     const [users, setUsers] = useState<User[]>([]); // 用戶清單
     const [roomId, setRoomId] = useState<string>(''); // 當前房間 ID
-    
+
+    useEffect(() => {
+        if (socket) {
+            socket.emit('authenticate', { username: 'user1' });
+
+            socket.on('authenticated', (response: any) => {
+                if (response.status === 'success') {
+                    console.log('Authentication successful');
+                } else {
+                    console.error('Authentication failed');
+                }
+            });
+
+            socket.off('authenticated');
+        } else {
+            console.warn("Socket connection is not available.");
+        }
+    });
+
     const loadRooms = async () => {
         try {
             const response = await fetch(`http://127.0.0.1:12345/room-list?username=${username}`);
@@ -58,15 +74,6 @@ const ChatRoom: React.FC<{ socket: WebSocket | null }> = ({ socket }) => {
 
     useEffect(() => {
         loadRooms();
-
-        socket.on('room_list_update', (updatedRoomList) => {
-            console.log("Received updated room list:", updatedRoomList);
-            setUsers(updatedRoomList);
-        });
-
-        return () => {
-            socket.off('room_list_update');
-        };
     }, []);
 
     // 當選擇用戶時，設置對應的 roomId
@@ -98,7 +105,6 @@ const ChatRoom: React.FC<{ socket: WebSocket | null }> = ({ socket }) => {
                     ...prev,
                     [roomId]: [...(prev[roomId] || []), newMessage], // 根據 roomId 更新訊息
                 };
-                console.log("Updated messages:", updatedMessages); // 檢查更新後的 messages
                 return updatedMessages;
             });
     
@@ -165,33 +171,26 @@ const ChatRoom: React.FC<{ socket: WebSocket | null }> = ({ socket }) => {
     };
 
     useEffect(() => {
-        if (roomId && username) {
+        if (socket&&roomId && username) {
             loadMessageHistory(roomId, username);
+            socket.on('history_update', (message: any) => {
+                console.log("Received message update: ", message);
+                setMessages((prev) => ({
+                    ...prev,
+                    [message.room_id]: [
+                        ...(prev[message.room_id] || []),
+                        message,
+                    ],
+                }));
+            });
+    
+            return () => {
+                socket.off('history_update');
+            };
         } else {
             console.warn("Missing room ID or username here.");
         }
-
-        socket.on('history_update', (message) => {
-            console.log("Received message:", message);
-            setMessages((prev) => {
-                const updatedMessages = {
-                    ...prev,
-                    [message.room_id]: [...(prev[message.room_id] || []), {
-                        from: message.from_user,
-                        content: message.message,
-                        time: new Date(message.date).toLocaleString(),
-                        read: message.status
-                    }]
-                };
-                console.log("Updated messages:", updatedMessages);
-                return updatedMessages;
-            });
-        });
-
-        return () => {
-            socket.off('history_update');
-        };
-    }, [roomId, username]);
+    }, [socket, roomId, username]);
 
     const loadUnreadMessages = async () => {
         try {
