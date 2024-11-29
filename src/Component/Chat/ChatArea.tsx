@@ -14,47 +14,23 @@ type ChatAreaProps = {
     username: string; // 當前使用者的 username
     messages: ChatMessage[]; // 傳入的訊息陣列
     onSendMessage: (message: ChatMessage) => void; // 傳送訊息的回呼函數
+    socket: WebSocket | null; // WebSocket 連接
 };
 
+
 // ChatArea 元件
-const ChatArea: React.FC<ChatAreaProps> = ({ selectedUser, username, messages, onSendMessage }) => {
+const ChatArea: React.FC<ChatAreaProps> = ({ selectedUser, username, messages, onSendMessage, socket }) => {
     const [input, setInput] = useState(''); // 用於儲存訊息輸入框的內容
-    const [socket, setSocket] = useState<WebSocket | null>(null); // 用於儲存 WebSocket 連接
 
     // 儲存用戶是否自定義 "已讀" 字樣，從 localStorage 獲取
     const [readReceipt, setReadReceipt] = useState<string>(
         localStorage.getItem('readReceipt') || '已讀'
     );
 
-    // 建立與 WebSocket 伺服器的連接
-    useEffect(() => {
-        if (socket) return; // 如果已有連接，則不重複建立
-
-        const ws = new WebSocket('ws://localhost:12345'); // 初始化 WebSocket，連接本地伺服器
-        setSocket(ws); // 設定 WebSocket 實例
-
-        // 當接收到伺服器的訊息時觸發
-        ws.onmessage = (event) => {
-            const messageData = JSON.parse(event.data); // 將訊息 JSON 轉為物件
-            const { from_username, message } = messageData; // 解構訊息內容
-
-            // 如果訊息來自當前選中的聊天對象，則新增到聊天紀錄中
-            if (from_username === selectedUser) {
-                const time = new Date().toLocaleTimeString(); // 訊息傳送時間
-                onSendMessage({ from: from_username, content: message, time, read: false });
-            }
-        };
-
-        // 當元件卸載時關閉 WebSocket 連接
-        return () => {
-            if (ws) ws.close();
-        };
-    }, [selectedUser, socket, onSendMessage]);
-
     // 傳送訊息
     const sendMessage = () => {
         if (selectedUser && input.trim() !== '' && socket) {
-            const time = new Date().toLocaleTimeString(); // 獲取傳送時間
+            const time = new Date().toLocaleString(); // 使用本地時間
             const messageData: ChatMessage = {
                 from: username, // 發送者是當前使用者
                 content: input, // 傳送的訊息內容

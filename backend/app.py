@@ -4,8 +4,19 @@ from flask_socketio import SocketIO
 import server
 
 app = Flask(__name__)
-app.secret_key = "SecretKey"
-CORS(app)
+# 設置 session cookie 的名稱
+
+from datetime import timedelta
+
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)  # 設定 session 有效期為7天
+
+app.config['SESSION_COOKIE_NAME'] = 'session'
+
+# 設置 cookie 是否只能通過 HTTPS 傳送（開發環境中可以設為 False）
+app.config['SESSION_COOKIE_SECURE'] = False  # 需要 HTTPS 時設為 True
+app.config['SECRET_KEY'] = 'SecretKey'
+# app.secret_key = "SecretKey"
+CORS(app, supports_credentials=True)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 # API routes
@@ -49,7 +60,8 @@ def login():
         return jsonify({'error': "Invalid username or password"}), 401
     
     session['username'] = username
-    return jsonify({'message': "Login successful", 'username': username}), 200
+    print(f"User {username} logged in. Session: {session}")  # 確認登錄後的 session
+    return jsonify({'message': "Login successful", 'username': result[0]}), 200
 
 @app.route('/user-list', methods=['GET'])
 def user_list():
@@ -70,6 +82,8 @@ def room_list():
     Request: ?username=username
     Response: rooms = [ {"room_id": "room_id", "room_name": "room_name" }, ... ]
     """
+    print(f"Session: {session}")  # 打印 session 內容，檢查是否包含 'username'
+
     if 'username' not in session:
         return jsonify({'error': 'Please login first'}), 401
 
