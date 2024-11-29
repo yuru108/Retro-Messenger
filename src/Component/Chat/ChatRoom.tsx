@@ -5,10 +5,6 @@ import ChatArea from './ChatArea'; // 聊天區域元件
 import UserProfile from './UserProfile'; // 用戶頭像與登出元件
 import { Socket } from 'socket.io-client';
 
-type ChatRoomProps = {
-    socket: WebSocket | null; // 接收 WebSocket 連線
-};
-
 // 聊天訊息的類型定義
 type ChatMessage = {
     from: string; // 發送訊息者的 username
@@ -74,6 +70,18 @@ const ChatRoom: React.FC<{ socket: typeof Socket | null }> = ({ socket }) => {
 
     useEffect(() => {
         loadRooms();
+
+        if (socket) {
+            socket.on('room_list_update', (roomData: any) => {
+                console.log("Received room update:", roomData);
+                
+                // TODO: 更新用戶列表
+            });
+
+            return () => {
+                socket.off('room_update');
+            };
+        }
     }, []);
 
     // 當選擇用戶時，設置對應的 roomId
@@ -175,13 +183,8 @@ const ChatRoom: React.FC<{ socket: typeof Socket | null }> = ({ socket }) => {
             loadMessageHistory(roomId, username);
             socket.on('history_update', (message: any) => {
                 console.log("Received message update: ", message);
-                setMessages((prev) => ({
-                    ...prev,
-                    [message.room_id]: [
-                        ...(prev[message.room_id] || []),
-                        message,
-                    ],
-                }));
+                
+                // TODO: 更新歷史訊息
             });
     
             return () => {

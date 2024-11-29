@@ -88,6 +88,8 @@ def login():
     if "login_error" in result:
         return jsonify({'error': "Invalid username or password"}), 401
     
+    # 更新用戶的聊天室列表
+    room_list_update(username)
     return jsonify({'message': "Login successful", 'username': username}), 200
 
 @app.route('/logout', methods=['POST'])
@@ -105,6 +107,9 @@ def logout():
     result = server.logout_user(username)
     
     if "logout_success" in result:
+        # 更新用戶的聊天室列表
+        room_list_update(username)
+
         return jsonify({'message': "Logout successful"}), 200
 
 @app.route('/user-list', methods=['GET'])
@@ -229,11 +234,11 @@ def room_list_update(username):
     """
     Push the updated room list to a specific user
     """
-    print("Updating room list for", username)
-
     if username:
-        room_list = server.get_room_list(username)
-        socketio.emit('room_list_update', room_list, to=connected_users[member])
+        for user in connected_users:
+            room_list = server.get_room_list(user)
+            socketio.emit('room_list_update', room_list, to=connected_users[user])
+            print(f"Room list updated for {user}")
     else:
         print("No username provided for room list update")
 
