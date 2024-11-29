@@ -159,6 +159,7 @@ def get_history(room_id, username):
     response = []
 
     if history:
+        mark_messages_as_read(room_id, username)
         for from_user, to_room_id, msg, date, read in history:
             from_user = find_user_by_name(from_user)
             to_room = find_room_by_roomid(to_room_id)
@@ -169,7 +170,6 @@ def get_history(room_id, username):
                 "date": date,
                 "status": True if read else False
             })
-        mark_messages_as_read(room_id, username)
     else:
         response = {"message": "no_messages"}
 

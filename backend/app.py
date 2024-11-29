@@ -45,6 +45,9 @@ def handle_authentication(data):
             del pending_connections[request.sid]
         print(f"User {username} authenticated with Socket ID {request.sid}")
         socketio.emit('authenticated', {'status': 'success'}, to=request.sid)
+    
+        # 更新用戶的聊天室列表
+        room_list_update()
     else:
         print(f"Authentication failed for socket {request.sid}")
         socketio.emit('authenticated', {'status': 'failed'}, to=request.sid)
@@ -87,9 +90,7 @@ def login():
     result = server.login_user(username, password)
     if "login_error" in result:
         return jsonify({'error': "Invalid username or password"}), 401
-    
-    # 更新用戶的聊天室列表
-    room_list_update()
+
     return jsonify({'message': "Login successful", 'username': username}), 200
 
 @app.route('/logout', methods=['POST'])
@@ -133,6 +134,7 @@ def room_list():
     Request: ?username=username
     Response: rooms = [ {"room_id": "room_id", "room_name": "room_name", "isOnline": True/False }, ... ]
     """
+
     username = request.args.get('username')
     if not username:
         return jsonify({'error': 'Username is required'}), 400
@@ -142,8 +144,7 @@ def room_list():
     for room in result:
         room_id = room.get('room_id')
         members = server.get_room_members(room_id, username)
-        online_members = [member for member in members if member in connected_users]
-        room['isOnline'] = True if online_members else False
+        room['isOnline'] = any(member in connected_users for member in members)
 
     return jsonify(result), 200
 
@@ -241,6 +242,7 @@ def room_list_update():
     """
     Push the updated room list to a specific user
     """
+    print("connected_users:", connected_users)
     for user in connected_users:
         room_list = server.get_room_list(user)
         socketio.emit('room_list_update', room_list, to=connected_users[user])
