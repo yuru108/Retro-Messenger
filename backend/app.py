@@ -1,22 +1,21 @@
+from functools import wraps
 from flask import Flask, jsonify, request, session
 from flask_cors import CORS
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO
 import server
 
 app = Flask(__name__)
-# 設置 session cookie 的名稱
 
-from datetime import timedelta
+app.secret_key = "secret_key"
 
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)  # 設定 session 有效期為7天
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'None'
+app.config['SESSION_COOKIE_SECURE'] = False  # 若使用 HTTPS，則設為 True
+app.config['PERMANENT_SESSION_LIFETIME'] = 3600  # 設定 session 有效期為 1 小時
 
-app.config['SESSION_COOKIE_NAME'] = 'session'
-
-# 設置 cookie 是否只能通過 HTTPS 傳送（開發環境中可以設為 False）
-app.config['SESSION_COOKIE_SECURE'] = False  # 需要 HTTPS 時設為 True
-app.config['SECRET_KEY'] = 'SecretKey'
-# app.secret_key = "SecretKey"
-CORS(app, supports_credentials=True)
+CORS(app, supports_credentials=True, resources={
+    r"/*": {"origins": ["http://localhost:5173", "http://127.0.0.1:5173"]}
+})
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 active_connections = {}
@@ -35,6 +34,14 @@ def on_disconnect():
             del active_connections[username]
             print(f"User {username} disconnected")
             break
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'username' not in session:
+            return jsonify({'error': 'Please login first'}), 401
+        return f(*args, **kwargs)
+    return decorated_function
 
 # API routes
 @app.route('/register', methods=['POST'])
@@ -77,17 +84,15 @@ def login():
     
     session['username'] = username
     print(f"User {username} logged in. Session: {session}")  # 確認登錄後的 session
-    return jsonify({'message': "Login successful", 'username': result[0]}), 200
+    return jsonify({'message': "Login successful", 'username': username}), 200
 
 @app.route('/logout', methods=['POST'])
+@login_required
 def logout():
     """
     Logout the current user
     Response: { "message": "Logout successful" }
     """
-    if 'username' not in session:
-        return jsonify({'error': 'No active session'}), 400
-
     data = request.json
     username = data.get('username')
 
@@ -100,14 +105,12 @@ def logout():
         return jsonify({'message': "Logout successful"}), 200
 
 @app.route('/user-list', methods=['GET'])
+@login_required
 def user_list():
     """
     Get the list of registered users
     Response: users = [ { "username": "username", "isOnline": "online/offline" }, ... ]
-    """
-    if 'username' not in session:
-        return jsonify({'error': 'Please login first'}), 401
-    
+    """    
     result = server.get_user_list()
 
     for user in result:
@@ -119,17 +122,13 @@ def user_list():
     return jsonify(result), 200
 
 @app.route('/room-list', methods=['GET'])
+@login_required
 def room_list():
     """
     Get the list of chat rooms
     Request: ?username=username
     Response: rooms = [ {"room_id": "room_id", "room_name": "room_name" }, ... ]
     """
-    print(f"Session: {session}")  # 打印 session 內容，檢查是否包含 'username'
-
-    if 'username' not in session:
-        return jsonify({'error': 'Please login first'}), 401
-
     username = request.args.get('username')
     if not username:
         return jsonify({'error': 'Username is required'}), 400
@@ -138,15 +137,13 @@ def room_list():
     return jsonify(result), 200
 
 @app.route('/send-message', methods=['POST'])
+@login_required
 def send_message():
     """
     Send a message to a chat room
     Request body: { "username": "username", "to_room_id": "room_id", "message": "message" }
     Response: { "status": "Message sent" or "Failed to send message" }
     """
-    if 'username' not in session:
-        return jsonify({'error': 'Please login first'}), 401
-    
     data = request.json
     from_user = data.get('username')
     to_room_id = data.get('to_room_id')
@@ -162,15 +159,13 @@ def send_message():
         return jsonify({'status': 'Failed to send message'}), 500
 
 @app.route('/message-history', methods=['GET'])
+@login_required
 def history():
     """
     Get the message history of a chat room
     Request: ?room_id=room_id&username=username
     Response: result = [ { "room_name": "room_name", "from_user": "username", "message": "message", "date": "date", "status": true/false }, ... ]
     """
-    if 'username' not in session:
-        return jsonify({'error': 'Please login first'}), 401
-
     room_id = request.args.get('room_id')
     username = request.args.get('username')
     if not room_id or not username:
@@ -180,15 +175,13 @@ def history():
     return jsonify(result), 200
 
 @app.route('/unread-messages', methods=['GET'])
+@login_required
 def unread_messages():
     """
     Get the unread messages of a user
     Request: ?username=username
     Response: messages = [ { "room_name": "room_name", "from_user": "username", "message": "message", "date": "date", "status": true/false }, ... ]
     """
-    if 'username' not in session:
-        return jsonify({'error': 'Please login first'}), 401
-
     username = request.args.get('username')
     if not username:
         return jsonify({'error': 'username is required'}), 400
@@ -197,15 +190,13 @@ def unread_messages():
     return jsonify(result), 200
 
 @app.route('/change-room-name', methods=['POST'])
+@login_required
 def change_room_name():
     """
     Change the name of a chat room
     Request body: { "room_id": "room_id", "room_name": "room_name" }
     Response: { "status": "Room name changed" or "Failed to change room name" }
     """
-    if 'username' not in session:
-        return jsonify({'error': 'Please login first'}), 401
-
     data = request.json
     room_id = data.get('room_id')
     room_name = data.get('room_name')
@@ -220,16 +211,13 @@ def change_room_name():
         return jsonify({'status': 'Failed to change room name'}), 500
 
 @app.route('/create-room', methods=['POST'])
+@login_required
 def create_room():
     """
     Create a new chat room
     Request body: { "room_name": "room_name", "userlisr": ["username1", "username2", ...] }
     Response: { "room_id": "room_id" }
     """
-
-    if 'username' not in session:
-        return jsonify({'error': 'Please login first'}), 401
-
     data = request.json
     room_name = data.get('room_name')
     userlist = data.get('userlist')
