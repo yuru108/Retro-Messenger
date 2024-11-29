@@ -1,8 +1,7 @@
 from flask import Flask, jsonify, request, session
 from flask_cors import CORS
 from flask_socketio import SocketIO
-import asyncio
-import websockets
+import server
 
 app = Flask(__name__)
 # 設置 session cookie 的名稱
@@ -20,27 +19,6 @@ app.config['SECRET_KEY'] = 'SecretKey'
 CORS(app, supports_credentials=True)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-# WebSocket URI
-WS_SERVER_URI = "ws://127.0.0.1:8000"
-
-
-# Helper to send data to the WebSocket server
-async def send_to_server(event, *args):
-    try:
-        async with websockets.connect(WS_SERVER_URI, ping_interval=20, ping_timeout=10) as websocket:
-            await websocket.send(event)
-            for arg in args:
-                await websocket.send(arg)
-            while True:
-                try:
-                    msg = await asyncio.wait_for(websocket.recv(), timeout=0.5)
-                    print(f"Received message:\n{msg}")
-                    return msg.split("\n")
-                except asyncio.TimeoutError:
-                    break
-    except Exception as e:
-        return [f"Error: {str(e)}"]
-
 # API routes
 @app.route('/register', methods=['POST'])
 def register():
@@ -56,12 +34,12 @@ def register():
     if not username or not password:
         return jsonify({'error': 'Username and password are required'}), 400
 
-    result = asyncio.run(send_to_server("register", username, password))
+    result = server.register_user(username, password)
     if "user_already_exists" in result:
         return jsonify({'error': "Username already exists"}), 409
     
     session['username'] = username
-    return jsonify({'message': "Registration successful", 'username': result[0]}), 201
+    return jsonify({'message': "Registration successful", 'username': username}), 201
 
 @app.route('/login', methods=['POST'])
 def login():
@@ -77,13 +55,12 @@ def login():
     if not username or not password:
         return jsonify({'error': 'Username and password are required'}), 400
 
-    result = asyncio.run(send_to_server("login", username, password))
+    result = server.login_user(username, password)
     if "login_error" in result:
         return jsonify({'error': "Invalid username or password"}), 401
     
     session['username'] = username
     print(f"User {username} logged in. Session: {session}")  # 確認登錄後的 session
-
     return jsonify({'message': "Login successful", 'username': result[0]}), 200
 
 @app.route('/user-list', methods=['GET'])
@@ -95,16 +72,8 @@ def user_list():
     if 'username' not in session:
         return jsonify({'error': 'Please login first'}), 401
     
-    result = asyncio.run(send_to_server("get_user_list"))
-    users = []
-    for user in result:
-        parts = user.split()
-        if len(parts) == 0:
-            continue
-        username = parts[0]
-        is_online = parts[-1] == "isOnline" if len(parts) > 1 else False
-        users.append({'username': username, 'isOnline': is_online})
-    return jsonify(users)
+    result = server.get_user_list()
+    return jsonify(result)
 
 @app.route('/room-list', methods=['GET'])
 def room_list():
@@ -122,16 +91,8 @@ def room_list():
     if not username:
         return jsonify({'error': 'Username is required'}), 400
 
-    result = asyncio.run(send_to_server("get_room_list", username))
-    rooms = []
-    for room in result:
-        parts = room.split(maxsplit=1)
-        if len(parts) < 2:
-            continue
-        room_id = parts[0]
-        room_name = parts[1]
-        rooms.append({'room_id': room_id, 'room_name': room_name})
-    return jsonify(rooms)
+    result = server.get_room_list(username)
+    return jsonify(result)
 
 @app.route('/send-message', methods=['POST'])
 def send_message():
@@ -151,7 +112,7 @@ def send_message():
     if not all([from_user, to_room_id, message]):
         return jsonify({'error': 'Invalid data'}), 400
 
-    result = asyncio.run(send_to_server("send_message", from_user, to_room_id, message))
+    result = server.send_message(from_user, to_room_id, message)
     if "message_sent" in result:
         return jsonify({'status': "Message sent"}), 200
     return jsonify({'status': "Failed to send message"}), 400
@@ -171,25 +132,8 @@ def history():
     if not room_id or not username:
         return jsonify({'error': 'Room ID and username is required'}), 400
 
-    result = asyncio.run(send_to_server("get_messages_history", room_id, username))
-
-    if "no_messages" in result:
-        return jsonify({'message': 'No messages found'})
-    
-    messages = []
-    for message in result:
-        parts = message.split("|")
-        if len(parts) < 5:
-            continue
-        room_name, from_user, msg, date, status = parts
-        messages.append({
-            'room_name': room_name,
-            'from_user': from_user,
-            'message': msg,
-            'date': date,
-            'status': status == "已讀"
-        })
-    return jsonify(messages)
+    result = server.get_history(room_id, username)
+    return jsonify(result)
 
 @app.route('/unread-messages', methods=['GET'])
 def unread_messages():
@@ -205,25 +149,8 @@ def unread_messages():
     if not username:
         return jsonify({'error': 'username is required'}), 400
 
-    result = asyncio.run(send_to_server("get_unread_messages", username))
-    
-    if "no_messages" in result:
-        return jsonify({'message': 'No messages found'})
-    
-    messages = []
-    for message in result:
-        parts = message.split("|")
-        if len(parts) < 5:
-            continue
-        room_name, from_user, msg, date, status = parts
-        messages.append({
-            'room_name': room_name,
-            'from_user': from_user,
-            'message': msg,
-            'date': date,
-            'status': status == "已讀"
-        })
-    return jsonify(messages)
+    result = server.get_unread_messages(username)
+    return jsonify(result)
 
 @app.route('/change-room-name', methods=['POST'])
 def change_room_name():
@@ -242,7 +169,7 @@ def change_room_name():
     if not all([room_id, room_name]):
         return jsonify({'error': 'Invalid data'}), 400
 
-    result = asyncio.run(send_to_server("change_room_name", room_id, room_name))
+    result = server.change_room_name(room_id, room_name)
     if "room_name_changed" in result:
         return jsonify({'status': "Room name changed"}), 200
     return jsonify({'status': "Failed to change room name"}), 400
