@@ -4,6 +4,10 @@ import UserList from './UserList'; // 用戶列表元件
 import ChatArea from './ChatArea'; // 聊天區域元件
 import UserProfile from './UserProfile'; // 用戶頭像與登出元件
 
+type ChatRoomProps = {
+    socket: WebSocket | null; // 接收 WebSocket 連線
+};
+
 // 聊天訊息的類型定義
 type ChatMessage = {
     from: string; // 發送訊息者的 username
@@ -21,24 +25,8 @@ type User = {
 // WebSocket 伺服器 URL
 const WS_URL = "ws://127.0.0.1:12345";
 
-const fetchWithCredentials = async (url: string) => {
-    const response = await fetch(url, {
-        method: 'GET',
-        credentials: 'include',  // 攜帶 Cookie
-        headers: {
-            'Content-Type': 'application/json',
-        },
-    });
 
-    if (response.status === 401) {
-        alert('Unauthorized. Please log in again.');
-        window.location.href = '/login';  // 重新導向至登入頁面
-    }
-    return response.json();
-};
-
-
-const ChatRoom: React.FC = () => {
+const ChatRoom: React.FC <{ socket: WebSocket | null }> = ({ socket }) => {
     // 從 UserContext 取得當前用戶的 username
     const userContext = useContext(UserContext);
     const username = String(userContext?.username) || "testUser123"; // 如果 Context 為空，使用測試用戶
@@ -55,20 +43,25 @@ const ChatRoom: React.FC = () => {
 
     const loadRooms = async () => {
         try {
-            const response = await fetch(`http://127.0.0.1:12345/room-list?username=${username}`);
+            const response = await fetch(`http://127.0.0.1:12345/room-list?username=${username}`, {
+                credentials: 'include', // 傳遞 Cookie
+            });
             if (response.ok) {
                 const rooms = await response.json();
                 setUsers(rooms.map((room: { room_id: string; room_name: string }) => ({
                     username: room.room_name,
-                    isOnline: true // 可根據後端邏輯調整在線狀態
+                    isOnline: true // 根據後端邏輯調整在線狀態
                 })));
             } else {
-                console.error("Failed to load rooms");
+                console.error(`Failed to load rooms, status: ${response.status}`);
+                const error = await response.json();
+                console.error(error);
             }
         } catch (error) {
             console.error("Error fetching room list:", error);
         }
     };
+    
     
     useEffect(() => {
         loadRooms();
@@ -156,7 +149,6 @@ const ChatRoom: React.FC = () => {
         loadUnreadMessages();
     }, []);    
     
-
     return (
         <div className="flex h-screen">
             {/* 用戶列表區域 */}
@@ -180,6 +172,7 @@ const ChatRoom: React.FC = () => {
             <div className="flex-grow flex flex-col">
                 {selectedUser && (
                     <ChatArea
+                        socket={socket}
                         selectedUser={selectedUser}
                         username={username}
                         messages={messages[selectedUser] || []}
