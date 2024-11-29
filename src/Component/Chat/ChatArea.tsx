@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 
 // 定義單條訊息的資料結構
 type ChatMessage = {
-    from: string; // 發送者的 UID
+    from: string; // 發送者的 username
     content: string; // 訊息內容
     time: string; // 傳送時間
     read: boolean; // 訊息是否已讀
@@ -10,14 +10,14 @@ type ChatMessage = {
 
 // 定義 ChatArea 元件的屬性類型
 type ChatAreaProps = {
-    selectedUser: string | null; // 被選中的聊天對象 UID
-    uid: string; // 當前使用者的 UID
+    selectedUser: string | null; // 被選中的聊天對象 username
+    username: string; // 當前使用者的 username
     messages: ChatMessage[]; // 傳入的訊息陣列
     onSendMessage: (message: ChatMessage) => void; // 傳送訊息的回呼函數
 };
 
 // ChatArea 元件
-const ChatArea: React.FC<ChatAreaProps> = ({ selectedUser, uid, messages, onSendMessage }) => {
+const ChatArea: React.FC<ChatAreaProps> = ({ selectedUser, username, messages, onSendMessage }) => {
     const [input, setInput] = useState(''); // 用於儲存訊息輸入框的內容
     const [socket, setSocket] = useState<WebSocket | null>(null); // 用於儲存 WebSocket 連接
 
@@ -36,12 +36,12 @@ const ChatArea: React.FC<ChatAreaProps> = ({ selectedUser, uid, messages, onSend
         // 當接收到伺服器的訊息時觸發
         ws.onmessage = (event) => {
             const messageData = JSON.parse(event.data); // 將訊息 JSON 轉為物件
-            const { from_uid, message } = messageData; // 解構訊息內容
+            const { from_username, message } = messageData; // 解構訊息內容
 
             // 如果訊息來自當前選中的聊天對象，則新增到聊天紀錄中
-            if (from_uid === selectedUser) {
+            if (from_username === selectedUser) {
                 const time = new Date().toLocaleTimeString(); // 訊息傳送時間
-                onSendMessage({ from: from_uid, content: message, time, read: false });
+                onSendMessage({ from: from_username, content: message, time, read: false });
             }
         };
 
@@ -56,7 +56,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ selectedUser, uid, messages, onSend
         if (selectedUser && input.trim() !== '' && socket) {
             const time = new Date().toLocaleTimeString(); // 獲取傳送時間
             const messageData: ChatMessage = {
-                from: uid, // 發送者是當前使用者
+                from: username, // 發送者是當前使用者
                 content: input, // 傳送的訊息內容
                 time, // 傳送時間
                 read: false, // 預設為未讀
@@ -64,8 +64,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({ selectedUser, uid, messages, onSend
 
             // 將訊息以 JSON 格式傳送到 WebSocket 伺服器
             socket.send(JSON.stringify({
-                from_uid: uid,
-                to_uid: selectedUser,
+                from_username: username,
+                to_username: selectedUser,
                 message: input,
             }));
 
@@ -84,14 +84,14 @@ const ChatArea: React.FC<ChatAreaProps> = ({ selectedUser, uid, messages, onSend
                 </h2>
                 <ul>
                     {messages.map((msg, idx) => (
-                        <li key={idx} className={`mb-4 flex flex-col ${msg.from === uid ? 'items-end' : 'items-start'}`}>
+                        <li key={idx} className={`mb-4 flex flex-col ${msg.from === username ? 'items-end' : 'items-start'}`}>
                             {/* 訊息氣泡 */}
                             <div
-                                className={`p-3 rounded-md ${msg.from === uid ? 'bg-blue-100' : 'bg-gray-100'}`}
+                                className={`p-3 rounded-md ${msg.from === username ? 'bg-blue-100' : 'bg-gray-100'}`}
                                 style={{ maxWidth: '66%', wordBreak: 'break-word' }}
                             >
-                                {/* 如果是自己傳送的訊息，只顯示內容；否則顯示發送者 UID */}
-                                {msg.from === uid ? msg.content : `${msg.from}: ${msg.content}`}
+                                {/* 如果是自己傳送的訊息，只顯示內容；否則顯示發送者 username */}
+                                {msg.from === username ? msg.content : `${msg.from}: ${msg.content}`}
                             </div>
 
                             {/* 顯示訊息時間與是否已讀 */}
@@ -105,7 +105,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ selectedUser, uid, messages, onSend
                             >
                                 {msg.time}{' '}
                                 {msg.read ? (
-                                    msg.from === uid ? (
+                                    msg.from === username ? (
                                         // 顯示自定義已讀字樣或預設字樣
                                         readReceipt
                                     ) : '已讀'

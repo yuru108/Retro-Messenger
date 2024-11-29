@@ -6,7 +6,7 @@ import axios from 'axios'; // 用於 HTTP 請求的庫
 
 // 定義 Login 元件的 props 類型
 type LoginProps = {
-    onLoginSuccess: (uid: string, username: string) => void; // 登入成功後的回調函數
+    onLoginSuccess: (username: string) => void; // 登入成功後的回調函數
 };
 
 // Login 元件：處理使用者登入邏輯
@@ -22,19 +22,18 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         try {
             // 發送 POST 請求到後端進行登入驗證
             const response = await axios.post('http://localhost:12345/login', { username, password });
-
+    
             // 驗證通過（HTTP 200）時的處理
             if (response.status === 200) {
                 console.log('Login successful:', response.data);
-
-                // 從回應中提取 uid，並將其與 username 儲存在 localStorage
-                const { uid } = response.data;
-                localStorage.setItem('uid', uid);
-                localStorage.setItem('username', username);
-
+    
+                // 從回應中提取 username，並將其儲存在 localStorage
+                const { username: user } = response.data; // 提取回應中的 username
+                localStorage.setItem('username', user); // 儲存 username
+    
                 // 呼叫父元件傳入的回調函數，將登入資訊傳遞出去
-                onLoginSuccess(uid, username);
-
+                onLoginSuccess(user);
+    
                 // 導航到聊天頁面
                 navigate('/chat');
             }
@@ -43,6 +42,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             setError(error.response?.data?.message || 'Login failed. Please try again.');
         }
     };
+    
 
     return (
         <div className="flex flex-col justify-center items-center h-screen">
