@@ -9,7 +9,7 @@ type User = {
 // 定義元件的屬性型別
 type UserListProps = {
     users: User[];                      // 用戶列表
-    onSelectUser: (user: string) => void; // 用戶點擊時的回調函數，返回選中的用戶名稱
+    onSelectUser: (username: string) => void;  // 修改為接受 string 類型
     selectedUser: string | null;        // 當前選中的用戶名稱
     className?: string;                 // 可選的外部樣式類名，用於自訂樣式
 };
