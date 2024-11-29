@@ -1,7 +1,5 @@
-
 import React, { useState } from 'react';
 import axios from 'axios';
-
 
 // 定義 Props 的類型
 interface GroupCreationModalProps {
@@ -73,18 +71,19 @@ const GroupCreationModal: React.FC<GroupCreationModalProps> = ({ onClose, onCrea
             {/* 成員選擇列表 */}
             <div>
                 <h3 className="font-semibold mb-2">選擇成員</h3>
-                {users.map((user) => (
-                    <div key={user} className="flex items-center mb-2">
-                        {/* 成員選擇複選框 */}
-                        <input
-                            type="checkbox"
-                            checked={selectedMembers.includes(user)} // 檢查該用戶是否已被選中
-                            onChange={() => handleMemberChange(user)} // 處理成員選擇變更
-                            className="mr-2"
-                        />
-                        <label className="text-gray-700">{user}</label>
-                    </div>
-                ))}
+                {users
+                    .map((user) => (
+                        <div key={user} className="flex items-center mb-2">
+                            {/* 成員選擇複選框 */}
+                            <input
+                                type="checkbox"
+                                checked={selectedMembers.includes(user)} // 檢查該用戶是否已被選中
+                                onChange={() => handleMemberChange(user)} // 處理成員選擇變更
+                                className="mr-2"
+                            />
+                            <label className="text-gray-700">{user}</label>
+                        </div>
+                    ))}
             </div>
 
             {/* 操作按鈕 */}

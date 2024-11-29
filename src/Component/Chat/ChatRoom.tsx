@@ -29,13 +29,13 @@ const socket = io("http://localhost:12345");
 const ChatRoom: React.FC<{ socket: WebSocket | null }> = ({ socket }) => {
     const userContext = useContext(UserContext);
     const username = String(userContext?.username) || "testUser123"; // 如果 Context 為空，使用測試用戶
-
+    
     // 狀態管理
     const [selectedUser, setSelectedUser] = useState<string | null>(null); // 當前選中的聊天對象
     const [messages, setMessages] = useState<{ [key: string]: ChatMessage[] }>({}); // 所有聊天訊息的集合
     const [users, setUsers] = useState<User[]>([]); // 用戶清單
     const [roomId, setRoomId] = useState<string>(''); // 當前房間 ID
-
+    
     const loadRooms = async () => {
         try {
             const response = await fetch(`http://127.0.0.1:12345/room-list?username=${username}`);
@@ -209,6 +209,29 @@ const ChatRoom: React.FC<{ socket: WebSocket | null }> = ({ socket }) => {
         loadUnreadMessages();
     }, []); 
 
+    // 用戶登出處理
+    const handleLogout = async () => {
+        try {
+            const response = await fetch("http://127.0.0.1:12345/logout", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ username }), // 發送 username 到後端 API
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                console.log(data.message); // 顯示登出成功訊息
+            } else {
+                const errorData = await response.json();
+                console.error(errorData.error || "登出失敗");
+            }
+        } catch (error) {
+            console.error("Error logging out:", error);
+        }
+    };
+
     return (
         <div className="flex h-screen">
             {/* 用戶列表區域 */}
@@ -222,7 +245,7 @@ const ChatRoom: React.FC<{ socket: WebSocket | null }> = ({ socket }) => {
                 <div className="mt-auto">
                     <UserProfile 
                         username={username}
-                        onLogout={() => {}} // 登出處理函數
+                        onLogout={handleLogout}  // 將登出函數傳遞給 UserProfile
                         users={users}
                     />
                 </div>
@@ -237,6 +260,9 @@ const ChatRoom: React.FC<{ socket: WebSocket | null }> = ({ socket }) => {
                         username={username}
                         messages={messages[roomId] || []} // 使用 roomId 來獲取正確的訊息
                         onSendMessage={sendMessage}
+                        setUserList={setUsers} // 將 setUserList 函數作為 prop 傳遞
+                        userList={users}
+                        roomId={roomId} // 傳遞 roomId
                     />
                 )}
             </div>
