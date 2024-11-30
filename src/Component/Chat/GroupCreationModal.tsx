@@ -62,7 +62,7 @@ const GroupCreationModal: React.FC<GroupCreationModalProps> = ({ onClose, onCrea
     };
 
     return (
-        <div className="absolute left-0 bottom-20 bg-white p-4 shadow-lg rounded-lg max-w-md mx-auto z-50">
+        <div className="absolute left-0 bottom-12 bg-white p-4 shadow-lg rounded-lg max-w-md mx-auto z-50">
             <h2 className="text-lg font-bold mb-4">建立群組</h2>
             <input
                 type="text"
@@ -73,6 +73,7 @@ const GroupCreationModal: React.FC<GroupCreationModalProps> = ({ onClose, onCrea
             />
             <div>
                 <h3 className="font-semibold mb-2">選擇成員</h3>
+                <div className="max-h-48 overflow-y-auto border rounded p-2">
                 {users.map((user) => (
                     <div key={user} className="flex items-center mb-2">
                         <input
@@ -84,6 +85,7 @@ const GroupCreationModal: React.FC<GroupCreationModalProps> = ({ onClose, onCrea
                         <label className="text-gray-700">{user}</label>
                     </div>
                 ))}
+                </div>
             </div>
             <div className="mt-4 flex justify-end space-x-2">
                 <button onClick={onClose} className="bg-gray-300 text-black px-4 py-2 rounded hover:bg-gray-400">

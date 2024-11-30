@@ -230,17 +230,21 @@ const ChatRoom: React.FC<{ socket: typeof Socket | null }> = ({ socket }) => {
     return (
         <div className="flex h-screen">
             {/* 用戶列表區域 */}
-            <div className="w-64 min-w-[150px] bg-gray-100 p-4 overflow-y-auto flex flex-col h-full flex-shrink-0">
-                <UserList 
-                    users={users} 
-                    onSelectUser={handleSelectUser} // 用戶選擇後更新 selectedUser 和 roomId
-                    selectedUser={selectedUser} 
-                    className="flex-grow"
-                />
-                <div className="mt-auto">
+            <div className="w-64 min-w-[150px] bg-gray-100 flex flex-col h-full flex-shrink-0">
+                {/* 可滾動的用戶列表區域 */}
+                <div className="overflow-y-auto flex-grow p-4">
+                    <UserList 
+                        users={users} 
+                        onSelectUser={handleSelectUser}
+                        selectedUser={selectedUser}
+                        className="space-y-2"
+                    />
+                </div>
+                {/* 固定在底部的 UserProfile */}
+                <div className="bg-gray-100 p-3">
                     <UserProfile 
                         username={username}
-                        onLogout={handleLogout}  // 將登出函數傳遞給 UserProfile
+                        onLogout={handleLogout}
                         users={users}
                     />
                 </div>
