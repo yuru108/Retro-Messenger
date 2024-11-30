@@ -18,6 +18,7 @@ type User = {
     username: string; // 用戶名
     isOnline: boolean; // 是否在線狀態
     roomId: string; // 房間 ID
+    unreadMessages: number; // 未讀訊息數量
 };
 
 const ChatRoom: React.FC<{ socket: typeof Socket | null }> = ({ socket }) => {    
@@ -53,10 +54,11 @@ const ChatRoom: React.FC<{ socket: typeof Socket | null }> = ({ socket }) => {
             const response = await fetch(`http://127.0.0.1:12345/room-list?username=${username}`);
             if (response.ok) {
                 const rooms = await response.json();
-                setUsers(rooms.map((room: { room_id: string; room_name: string; isOnline: boolean }) => ({
+                setUsers(rooms.map((room: { room_id: string; room_name: string; isOnline: boolean; unreadMessages: number}) => ({
                     username: room.room_name,
                     isOnline: room.isOnline,
                     roomId: room.room_id,
+                    unreadMessages: room.unreadMessages
                 })));
             } else {
                 console.error(`Failed to load rooms, status: ${response.status}`);
@@ -181,11 +183,24 @@ const ChatRoom: React.FC<{ socket: typeof Socket | null }> = ({ socket }) => {
     useEffect(() => {
         if (socket&&roomId && username) {
             loadMessageHistory(roomId, username);
-
             socket.on('history_update', (message: any) => {
                 console.log("Received message update: ", message);
                 
                 loadMessageHistory(roomId, username);
+                // 更新未讀訊息數量
+                // TODO: roomId 對不上 以及 重新登入後紅點會消失
+                setUsers((prevUsers) =>
+                    prevUsers.map((user) => {
+                        if ( user.username !== username && user.roomId === roomId) {
+                            console.log("Matched room:", user.roomId);
+                            return {
+                                ...user,
+                                unreadMessages: (user.unreadMessages || 0) + 1,
+                            };
+                        }
+                        return user;
+                    })
+                );
             });
     
             return () => {

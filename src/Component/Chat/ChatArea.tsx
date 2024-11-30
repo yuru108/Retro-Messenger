@@ -13,6 +13,7 @@ type User = {
     username: string; // 用戶名
     isOnline: boolean; // 是否在線狀態
     roomId: string; // 房間 ID
+    unreadMessages: number; // 未讀訊息數量
 };
 
 // 定義 ChatArea 元件的屬性類型
