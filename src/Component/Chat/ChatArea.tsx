@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Socket } from 'socket.io-client';
 
 // 定義單條訊息的資料結構
@@ -22,45 +22,63 @@ type ChatAreaProps = {
     messages: ChatMessage[];
     onSendMessage: (message: ChatMessage) => void;
     socket: typeof Socket | null; // WebSocket 連接
-    setUserList: React.Dispatch<React.SetStateAction<User[]>>; // 使用 setUsers 並更新類型
+    setUserList: React.Dispatch<React.SetStateAction<User[]>>;
     userList: User[];
     roomId: string; // 新增 roomId
 };
 
 // ChatArea 元件
-const ChatArea: React.FC<ChatAreaProps> = ({ selectedUser, username, messages, onSendMessage, socket, setUserList, userList, roomId }) => {
-    const [input, setInput] = useState(''); // 用於儲存訊息輸入框的內容
-    const [newRoomName, setNewRoomName] = useState<string>(''); // 新名稱的狀態
-    const [showRoomNameInput, setShowRoomNameInput] = useState<boolean>(false); // 控制輸入框顯示
+const ChatArea: React.FC<ChatAreaProps> = ({
+    selectedUser,
+    username,
+    messages,
+    onSendMessage,
+    socket,
+    setUserList,
+    userList,
+    roomId,
+}) => {
+    const [input, setInput] = useState('');
+    const [newRoomName, setNewRoomName] = useState<string>('');
+    const [showRoomNameInput, setShowRoomNameInput] = useState<boolean>(false);
 
-    // 儲存用戶是否自定義 "已讀" 字樣，從 localStorage 獲取
     const [readReceipt, setReadReceipt] = useState<string>(
         localStorage.getItem('readReceipt') || '已讀'
     );
+
+    // 訊息列表的參考，用於自動滾動
+    const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        // 滾動到訊息底部
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [messages]);
 
     // 傳送訊息
     const sendMessage = () => {
         console.log("selectedUser:", selectedUser);
         console.log("input:", input);
         if (selectedUser && input.trim() !== '' && socket) {
-            const time = new Date().toLocaleString(); // 使用本地時間
+            const time = new Date().toLocaleString();
             const messageData: ChatMessage = {
-                from: username, // 發送者是當前使用者
-                content: input, // 傳送的訊息內容
-                time, // 傳送時間
-                read: false, // 預設為未讀
+                from: username,
+                content: input,
+                time,
+                read: false,
             };
 
             // 將訊息以 JSON 格式傳送到 WebSocket 伺服器
-            socket.send(JSON.stringify({
-                from_username: username,
-                to_username: selectedUser,
-                message: input,
-            }));
+            socket.send(
+                JSON.stringify({
+                    from_username: username,
+                    to_username: selectedUser,
+                    message: input,
+                })
+            );
 
             // 新增到本地聊天紀錄
             onSendMessage(messageData);
-            setInput(''); // 清空輸入框
+            setInput('');
         }
     };
 
@@ -83,7 +101,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ selectedUser, username, messages, o
                     const data = await response.json();
                     console.log("Room ID:", roomId);
                     console.log("New Room Name:", newRoomName);
-                    console.log('Room name changed:', data.status); // 成功回應
+                    console.log('Room name changed:', data.status);
                 } else {
                     const errorData = await response.json();
                     console.error('Failed to change room name:', errorData.error || 'Unknown error');
@@ -95,7 +113,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({ selectedUser, username, messages, o
             console.log('Room ID or new room name is missing');
         }
     };
-    
 
     return (
         <div className="flex h-screen">
@@ -155,7 +172,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ selectedUser, username, messages, o
                                 >
                                     {msg.from === username ? msg.content : `${msg.from}: ${msg.content}`}
                                 </div>
-    
+
                                 {/* 顯示訊息時間與是否已讀 */}
                                 <span
                                     className="text-gray-400 text-xs mt-1"
@@ -174,9 +191,11 @@ const ChatArea: React.FC<ChatAreaProps> = ({ selectedUser, username, messages, o
                                 </span>
                             </li>
                         ))}
+                        {/* 放置訊息底部的參考點 */}
+                        <div ref={messagesEndRef} />
                     </ul>
                 </div>
-    
+
                 {/* 訊息輸入區域，使用 mt-auto 確保其固定在底部 */}
                 <div className="flex mt-auto">
                     <input
