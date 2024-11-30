@@ -132,7 +132,7 @@ def room_list():
     """
     Get the list of chat rooms
     Request: ?username=username
-    Response: rooms = [ {"room_id": "room_id", "room_name": "room_name", "isOnline": True/False }, ... ]
+    Response: rooms = [ {"room_id": "room_id", "room_name": "room_name", "isOnline": True/False, "unreadMessages": number }, ... ]
     """
 
     username = request.args.get('username')
@@ -145,6 +145,7 @@ def room_list():
         room_id = room.get('room_id')
         members = server.get_room_members(room_id, username)
         room['isOnline'] = any(member in connected_users for member in members)
+        room['unreadMessages'] = server.get_unread_messages(room_id, username)
 
     return jsonify(result), 200
 
@@ -224,11 +225,14 @@ def create_room():
     room_list_update()
     return jsonify(result), 200
 
+@socketio.on('room_list_update')
+def handle_room_list_update():
+    room_list_update()
+
 def room_list_update():
     """
     Push the updated room list to a specific user
     """
-    print("connected_users:", connected_users)
     for user in connected_users:
         room_list = server.get_room_list(user)
         socketio.emit('room_list_update', room_list, to=connected_users[user])
@@ -257,6 +261,8 @@ def history_update(room_id, username):
         member_list = server.get_room_members(room_id, username)
         for member in member_list:
             if member in connected_users:
+                print(f"Pushing history update to {member}")
+
                 socketio.emit('history_update', to=connected_users[member])
         
         socketio.emit('history_update', to=connected_users[username])

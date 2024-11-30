@@ -23,18 +23,7 @@ const App = () => {
         
         setSocket(socketInstance);
 
-        // 當接收到訊息時
-        socketInstance.on('message', (messageData: any) => {
-            console.log('Received message:', messageData);
-        });
-
-        // 當 Socket 斷開時
-        socketInstance.on('disconnect', () => {
-            console.log('WebSocket connection closed');
-        });
-
         return () => {
-            if (socketInstance) socketInstance.disconnect(); // 元件卸載時斷開連接
         };
     }, []);
 
