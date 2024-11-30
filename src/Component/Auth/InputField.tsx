@@ -29,6 +29,8 @@ const Label = React.forwardRef<
         }
     }, [formControlContext]);
 
+    console.log(dirty);
+
     // 如果沒有上下文，直接渲染標籤文字（不顯示 *）
     if (formControlContext === undefined) {
         return <p className={clsx('text-sm mb-1', classNameProp)}>{children}</p>;
