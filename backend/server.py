@@ -159,7 +159,6 @@ def get_history(room_id, username):
     response = []
 
     if history:
-        mark_messages_as_read(room_id, username)
         for from_user, to_room_id, msg, date, read in history:
             from_user = find_user_by_name(from_user)
             to_room = find_room_by_roomid(to_room_id)
@@ -207,24 +206,19 @@ def get_room_list(username):
 
     return response
 
-def get_unread_messages(username):
+def get_unread_messages(room_id, username):
     cursor.execute(
-        "SELECT from_user, to_room_id, message, date, read FROM Messages WHERE to_room_id IN (SELECT room_id FROM RoomMembers WHERE username = ?) AND read = 0",
-        (username, )
+        "SELECT message, date FROM Messages WHERE to_room_id = ? AND from_user != ? AND read = 0",
+        (room_id, username)
     )
     messages = cursor.fetchall()
     response = []
 
     if messages:
-        for from_user, to_room_id, msg, date, read in messages:
-            from_user = find_user_by_name(from_user)
-            to_room = find_room_by_roomid(to_room_id)
+        for msg, date in messages:
             response.append({
-                "room_name": to_room.room_name,
-                "from_user": from_user.username,
                 "message": msg,
-                "date": date,
-                "status": True if read else False
+                "date": date
             })
     else:
         response = {"message": "no_messages"}

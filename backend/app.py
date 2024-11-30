@@ -185,20 +185,6 @@ def history():
     result = server.get_history(room_id, username)
     return jsonify(result), 200
 
-@app.route('/unread-messages', methods=['GET'])
-def unread_messages():
-    """
-    Get the unread messages of a user
-    Request: ?username=username
-    Response: messages = [ { "room_name": "room_name", "from_user": "username", "message": "message", "date": "date", "status": true/false }, ... ]
-    """
-    username = request.args.get('username')
-    if not username:
-        return jsonify({'error': 'username is required'}), 400
-
-    result = server.get_unread_messages(username)
-    return jsonify(result), 200
-
 @app.route('/change-room-name', methods=['POST'])
 def change_room_name():
     """
@@ -248,16 +234,32 @@ def room_list_update():
         socketio.emit('room_list_update', room_list, to=connected_users[user])
         print(f"Room list updated for {user}")
 
+@socketio.on('history_update')
+def handle_history_update(data):
+    room_id = data.get('room_id')
+    username = data.get('username')
+    
+    history_update(room_id, username)
+
+@socketio.on('mark_read')
+def mark_read(data):
+    room_id = data.get('room_id')
+    username = data.get('username')
+
+    server.mark_messages_as_read(room_id, username)
+
 def history_update(room_id, username):
     """
     Push the updated message history to a specific user
     """
     if room_id and username:
-        message = server.get_history(room_id, username)
+        # Push the updated message history to other room members
         member_list = server.get_room_members(room_id, username)
         for member in member_list:
             if member in connected_users:
-                socketio.emit('history_update', message, to=connected_users[member])
+                socketio.emit('history_update', to=connected_users[member])
+        
+        socketio.emit('history_update', to=connected_users[username])
     else:
         print("No room ID or username provided for history update")
 
