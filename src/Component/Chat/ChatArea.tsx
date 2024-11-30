@@ -34,14 +34,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     messages,
     onSendMessage,
     socket,
-    setUserList,
-    userList,
     roomId,
 }) => {
     const [input, setInput] = useState('');
     const [newRoomName, setNewRoomName] = useState<string>('');
     const [showRoomNameInput, setShowRoomNameInput] = useState<boolean>(false);
 
+    // 儲存用戶是否自定義 "已讀" 字樣，從 localStorage 獲取
     const [readReceipt, setReadReceipt] = useState<string>(
         localStorage.getItem('readReceipt') || '已讀'
     );
@@ -59,26 +58,24 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         console.log("selectedUser:", selectedUser);
         console.log("input:", input);
         if (selectedUser && input.trim() !== '' && socket) {
-            const time = new Date().toLocaleString();
+            const time = new Date().toLocaleString(); // 使用本地時間
             const messageData: ChatMessage = {
-                from: username,
-                content: input,
-                time,
-                read: false,
+                from: username, // 發送者是當前使用者
+                content: input, // 傳送的訊息內容
+                time, // 傳送時間
+                read: false, // 預設為未讀
             };
 
             // 將訊息以 JSON 格式傳送到 WebSocket 伺服器
-            socket.send(
-                JSON.stringify({
-                    from_username: username,
-                    to_username: selectedUser,
-                    message: input,
-                })
-            );
+            socket.send(JSON.stringify({
+                from_username: username,
+                to_username: selectedUser,
+                message: input,
+            }));
 
             // 新增到本地聊天紀錄
             onSendMessage(messageData);
-            setInput('');
+            setInput(''); // 清空輸入框
         }
     };
 
