@@ -149,8 +149,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                                     console.log("Current Room ID:", roomId);
                                     console.log("New Room Name Input:", newRoomName);
                                     handleRoomNameChange();
-                                    selectedUser = newRoomName;
-
                                     // 清空輸入框並隱藏輸入區
                                     setNewRoomName('');
                                     setShowRoomNameInput(false);
