@@ -47,7 +47,7 @@ const App = () => {
                     {/* 傳遞 Socket.IO 連線給 ChatRoom 和 ChatArea */}
                     {username && <Route path="/chat" element={<ChatRoom socket={socket} />} />}
                     {username && <Route path="/settings" element={<Settings />} />}
-                    {username && <Route path="/group" element={<GroupCreation onClose={() => {}} onCreate={() => {}} users={[]} />} />}
+                    {username && <Route path="/group" element={<GroupCreation onClose={() => {}} onCreate={() => {}} />} />}
                 </Routes>
             </Router>
         </UserContext.Provider>

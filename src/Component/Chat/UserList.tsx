@@ -4,6 +4,7 @@ import React from 'react';
 type User = {
     username: string;   // 使用者名稱
     isOnline: boolean;  // 是否在線
+    unreadMessages: number; // 未讀訊息數量
 };
 
 // 定義元件的屬性型別
@@ -14,7 +15,7 @@ type UserListProps = {
     className?: string;                 // 可選的外部樣式類名，用於自訂樣式
 };
 
-const UserList: React.FC<UserListProps> = ({ users, onSelectUser, selectedUser }) => {
+const UserList: React.FC<UserListProps> = ({ users, onSelectUser, selectedUser}) => {
     return (
         <div className="space-y-2">
             {/* 如果有用戶，渲染用戶列表，否則顯示提示訊息 */}
@@ -32,9 +33,21 @@ const UserList: React.FC<UserListProps> = ({ users, onSelectUser, selectedUser }
                             {/* 用戶名 */}
                             <span className="font-semibold">{user.username}</span>
                             {/* 在線狀態顯示 */}
-                            <span className={`text-sm ${user.isOnline ? 'text-green-600' : 'text-gray-500'}`}>
-                                {user.isOnline ? 'Online' : 'Offline'}
-                            </span>
+                            <div className="flex items-center space-x-2">
+                                {/* 未讀訊息紅點 */}
+                                <span className="relative">
+                                    {user.unreadMessages ? (
+                                        <span className="absolute -top-2 right-0 bg-red-500 text-white text-xs font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                                            {user.unreadMessages}
+                                        </span>
+                                    ) : null}
+                                </span>
+
+                                {/* 在線狀態顯示 */}
+                                <span className={`text-sm ${user.isOnline ? 'text-green-600' : 'text-gray-500'}`}>
+                                    {user.isOnline ? 'Online' : 'Offline'}
+                                </span>
+                            </div>
                         </div>
                     </div>
                 ))

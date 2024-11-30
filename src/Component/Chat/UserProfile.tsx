@@ -9,7 +9,7 @@ type UserProfileProps = {
     users: { username: string }[]; // 新增 users 資料型別
 };
 
-const UserProfile: React.FC<UserProfileProps> = ({ username, onLogout, users }) => {
+const UserProfile: React.FC<UserProfileProps> = ({ username, onLogout}) => {
     const [isDropdownOpen, setIsDropdownOpen] = useState(false); // 控制下拉選單是否開啟
     const [isModalOpen, setIsModalOpen] = useState(false);       // 控制登出彈窗是否開啟
     const [isGroupModalOpen, setIsGroupModalOpen] = useState(false); // 控制群組創建彈窗是否開啟

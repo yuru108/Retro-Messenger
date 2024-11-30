@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Socket } from 'socket.io-client';
 
 // 定義單條訊息的資料結構
@@ -13,6 +13,7 @@ type User = {
     username: string; // 用戶名
     isOnline: boolean; // 是否在線狀態
     roomId: string; // 房間 ID
+    unreadMessages: number; // 未讀訊息數量
 };
 
 // 定義 ChatArea 元件的屬性類型
@@ -22,21 +23,36 @@ type ChatAreaProps = {
     messages: ChatMessage[];
     onSendMessage: (message: ChatMessage) => void;
     socket: typeof Socket | null; // WebSocket 連接
-    setUserList: React.Dispatch<React.SetStateAction<User[]>>; // 使用 setUsers 並更新類型
+    setUserList: React.Dispatch<React.SetStateAction<User[]>>;
     userList: User[];
     roomId: string; // 新增 roomId
 };
 
 // ChatArea 元件
-const ChatArea: React.FC<ChatAreaProps> = ({ selectedUser, username, messages, onSendMessage, socket, setUserList, userList, roomId }) => {
-    const [input, setInput] = useState(''); // 用於儲存訊息輸入框的內容
-    const [newRoomName, setNewRoomName] = useState<string>(''); // 新名稱的狀態
-    const [showRoomNameInput, setShowRoomNameInput] = useState<boolean>(false); // 控制輸入框顯示
+const ChatArea: React.FC<ChatAreaProps> = ({
+    selectedUser,
+    username,
+    messages,
+    onSendMessage,
+    socket,
+    roomId,
+}) => {
+    const [input, setInput] = useState('');
+    const [newRoomName, setNewRoomName] = useState<string>('');
+    const [showRoomNameInput, setShowRoomNameInput] = useState<boolean>(false);
 
     // 儲存用戶是否自定義 "已讀" 字樣，從 localStorage 獲取
     const [readReceipt, setReadReceipt] = useState<string>(
         localStorage.getItem('readReceipt') || '已讀'
     );
+
+    // 訊息列表的參考，用於自動滾動
+    const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        // 滾動到訊息底部
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [messages]);
 
     // 傳送訊息
     const sendMessage = () => {
@@ -83,7 +99,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ selectedUser, username, messages, o
                     const data = await response.json();
                     console.log("Room ID:", roomId);
                     console.log("New Room Name:", newRoomName);
-                    console.log('Room name changed:', data.status); // 成功回應
+                    console.log('Room name changed:', data.status);
                 } else {
                     const errorData = await response.json();
                     console.error('Failed to change room name:', errorData.error || 'Unknown error');
@@ -95,7 +111,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({ selectedUser, username, messages, o
             console.log('Room ID or new room name is missing');
         }
     };
-    
 
     return (
         <div className="flex h-screen">
@@ -155,13 +170,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({ selectedUser, username, messages, o
                                 >
                                     {msg.from === username ? msg.content : `${msg.from}: ${msg.content}`}
                                 </div>
-    
+
                                 {/* 顯示訊息時間與是否已讀 */}
                                 <span
                                     className="text-gray-400 text-xs mt-1"
                                     style={{
-                                        whiteSpace: 'normal', // 自動換行
-                                        wordBreak: 'break-word', // 強制換行
+                                        maxWidth: '250px', // 設定最大寬度
+                                        whiteSpace: 'normal', // 允許換行
                                     }}
                                 >
                                     {msg.time}{' '}
@@ -174,9 +189,11 @@ const ChatArea: React.FC<ChatAreaProps> = ({ selectedUser, username, messages, o
                                 </span>
                             </li>
                         ))}
+                        {/* 放置訊息底部的參考點 */}
+                        <div ref={messagesEndRef} />
                     </ul>
                 </div>
-    
+
                 {/* 訊息輸入區域，使用 mt-auto 確保其固定在底部 */}
                 <div className="flex mt-auto">
                     <input
