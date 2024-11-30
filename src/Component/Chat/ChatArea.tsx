@@ -164,12 +164,21 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                         {messages.map((msg, idx) => (
                             <li key={idx} className={`mb-4 flex flex-col ${msg.from === username ? 'items-end' : 'items-start'}`}>
                                 {/* 訊息氣泡 */}
+                                {msg.from !== username && (
+                                    <div className="text-xs text-gray-500 mb-1 pl-1">
+                                        {msg.from}
+                                    </div>
+                                )}
                                 <div
-                                    className={`p-3 rounded-md ${msg.from === username ? 'bg-blue-100' : 'bg-gray-100'}`}
-                                    style={{ maxWidth: '66%', wordBreak: 'break-word' }}
-                                >
-                                    {msg.from === username ? msg.content : `${msg.from}: ${msg.content}`}
+                                className={`p-3 rounded-md ${msg.from === username ? 'bg-blue-100' : 'bg-gray-100'}`}
+                                style={{ maxWidth: '66%', wordBreak: 'break-word' }}
+                            >
+                                
+                                <div>
+                                    {msg.content}
                                 </div>
+                            </div>
+
 
                                 {/* 顯示訊息時間與是否已讀 */}
                                 <span
