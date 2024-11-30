@@ -143,10 +143,14 @@ const ChatRoom: React.FC<{ socket: typeof Socket | null }> = ({ socket }) => {
                 }
             } catch (error) {
                 console.error("Error sending message:", error);
+            } finally {
+                if (socket) {
+                    socket.emit('history_update', { room_id: roomId, username: username })
+                    socket.emit('room_list_update');
+                }
             }
         }
     }, [selectedUser, roomId, username]);
-    
 
     const loadMessageHistory = async (roomId: string, username: string) => {
         try {
@@ -182,30 +186,15 @@ const ChatRoom: React.FC<{ socket: typeof Socket | null }> = ({ socket }) => {
 
     useEffect(() => {
         if (socket && roomId && username) {
-            loadMessageHistory(roomId, username);
-
             socket.emit('history_update', { room_id: roomId, username: username })
 
             socket.on('history_update', () => {
                 console.log("Recieved update request");
 
                 socket.emit('mark_read', { room_id: roomId, username: username });
+                socket.emit('room_list_update');
+
                 loadMessageHistory(roomId, username);
-                
-                // 更新未讀訊息數量
-                // TODO: roomId 對不上 以及 重新登入後紅點會消失
-                setUsers((prevUsers) =>
-                    prevUsers.map((user) => {
-                        if ( user.username !== username && user.roomId === roomId) {
-                            console.log("Matched room:", user.roomId);
-                            return {
-                                ...user,
-                                unreadMessages: (user.unreadMessages || 0) + 1,
-                            };
-                        }
-                        return user;
-                    })
-                );
             });
     
             return () => {

@@ -212,16 +212,12 @@ def get_unread_messages(room_id, username):
         (room_id, username)
     )
     messages = cursor.fetchall()
-    response = []
 
     if messages:
-        for msg, date in messages:
-            response.append({
-                "message": msg,
-                "date": date
-            })
+        # 回傳未讀訊息數量
+        return len(messages)
     else:
-        response = {"message": "no_messages"}
+        return 0
 
     return response
 
