@@ -179,12 +179,15 @@ const ChatRoom: React.FC<{ socket: typeof Socket | null }> = ({ socket }) => {
     };
 
     useEffect(() => {
-        if (socket&&roomId && username) {
+        if (socket && roomId && username) {
             loadMessageHistory(roomId, username);
 
-            socket.on('history_update', (message: any) => {
-                console.log("Received message update: ", message);
+            socket.emit('history_update', { room_id: roomId, username: username })
+
+            socket.on('history_update', () => {
+                console.log("Recieved update request");
                 
+                socket.emit('mark_read', { room_id: roomId, username: username });
                 loadMessageHistory(roomId, username);
             });
     
@@ -195,22 +198,6 @@ const ChatRoom: React.FC<{ socket: typeof Socket | null }> = ({ socket }) => {
             console.warn("Missing room ID or username here.");
         }
     }, [socket, roomId, username]);
-
-    const loadUnreadMessages = async () => {
-        try {
-            const response = await fetch(`http://127.0.0.1:12345/unread-messages?username=${username}`);
-            if (response.ok) {
-                const unreadMessages = await response.json();
-                console.log(unreadMessages);
-            }
-        } catch (error) {
-            console.error("Error fetching unread messages:", error);
-        }
-    };
-
-    useEffect(() => {
-        loadUnreadMessages();
-    }, []); 
 
     // 用戶登出處理
     const handleLogout = async () => {
