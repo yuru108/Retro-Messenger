@@ -42,7 +42,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     const [showRoomNameInput, setShowRoomNameInput] = useState<boolean>(false);
 
     // 儲存用戶是否自定義 "已讀" 字樣，從 localStorage 獲取
-    const [readReceipt, setReadReceipt] = useState<string>(
+    const [readReceipt] = useState<string>(
         localStorage.getItem('readReceipt') || '已讀'
     );
 

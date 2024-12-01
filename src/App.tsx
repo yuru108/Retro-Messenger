@@ -5,7 +5,6 @@ import Login from "./Component/Auth/Login";
 import Register from './Component/Auth/Register';
 import ChatRoom from './Component/Chat/ChatRoom';
 import Settings from './Component/Chat/Settings';
-import GroupCreation from './Component/Chat/GroupCreationModal';
 
 // 創建 UserContext，並設定初始的 username 為 null
 export const UserContext = createContext<{ username: string | null }>({ username: null });
@@ -36,7 +35,6 @@ const App = () => {
                     {/* 傳遞 Socket.IO 連線給 ChatRoom 和 ChatArea */}
                     {username && <Route path="/chat" element={<ChatRoom socket={socket} />} />}
                     {username && <Route path="/settings" element={<Settings />} />}
-                    {username && <Route path="/group" element={<GroupCreation onClose={() => {}} onCreate={() => {}} />} />}
                 </Routes>
             </Router>
         </UserContext.Provider>

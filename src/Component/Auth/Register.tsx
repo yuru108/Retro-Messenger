@@ -27,7 +27,7 @@ const Register = () => {
                 setSuccessMessage('Register success, please login!');
                 setError(null); // 清空錯誤訊息
 
-                // 2 秒後自動導航到登入頁面
+                // 1 秒後自動導航到登入頁面
                 setTimeout(() => {
                     navigate('/'); // 導航到根路徑（登入頁面）
                 }, 1000);
