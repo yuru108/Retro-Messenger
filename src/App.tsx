@@ -38,6 +38,10 @@ const App = () => {
     <UserContext.Provider value={{ username, setUsername }}>
       <Router>
         <Routes>
+          <Route
+            path='/'
+            element={<Login onLoginSuccess={(userUsername) => setUsername(userUsername)} />}
+          />
           <Route path='/register' element={<Register />} />
           {/* 傳遞 Socket.IO 連線給 ChatRoom 和 ChatArea */}
           {username ? (
